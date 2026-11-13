@@ -1,0 +1,540 @@
+package com.example.data
+
+import android.content.Context
+import com.example.R
+import com.example.data.local.CreatureProgressEntity
+import com.example.data.local.PlayerProfileEntity
+import com.example.data.local.PuzzleStatsEntity
+import com.example.data.remote.FirestoreCreatureProgress
+import com.example.data.remote.FirestorePuzzleStats
+import com.example.data.remote.FirestoreUserProfile
+import com.example.data.remote.OperationType
+import com.example.data.remote.handleFirestoreError
+import com.example.model.BrainSkill
+import com.example.model.DifficultyTier
+import com.example.model.PuzzleCompletionResult
+import com.example.model.PuzzleType
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.snapshots
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
+import kotlin.math.roundToInt
+
+class GameRepository(private val db: FirebaseFirestore) {
+
+    constructor(context: Context) : this(
+        FirebaseFirestore.getInstance(
+            context.applicationContext.getString(R.string.firestore_database_id)
+        )
+    )
+
+    private fun userDocRef(userId: String) = db.collection("users").document(userId)
+
+    private fun creaturesCollection(userId: String) =
+        userDocRef(userId).collection("creatures")
+
+    private fun puzzleStatsCollection(userId: String) =
+        userDocRef(userId).collection("puzzle_stats")
+
+    fun observeProfile(userId: String): Flow<PlayerProfileEntity> =
+        userDocRef(userId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObject(
+                    FirestoreUserProfile::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                )?.toEntity() ?: PlayerProfileEntity()
+            }
+
+    fun observeCreatures(userId: String): Flow<List<CreatureProgressEntity>> =
+        creaturesCollection(userId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(
+                    FirestoreCreatureProgress::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ).map { it.toEntity() }.sortedBy { it.creatureId }
+            }
+
+    fun observePuzzleStats(userId: String): Flow<List<PuzzleStatsEntity>> =
+        puzzleStatsCollection(userId)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.toObjects(
+                    FirestorePuzzleStats::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                ).map { it.toEntity() }
+            }
+
+    suspend fun getProfileOnce(userId: String): PlayerProfileEntity? {
+        val ref = userDocRef(userId)
+        return try {
+            val snapshot = ref.get().await()
+            if (!snapshot.exists()) {
+                null
+            } else {
+                snapshot.toObject(
+                    FirestoreUserProfile::class.java,
+                    DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                )?.toEntity()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun ensureSeeded(
+        userId: String,
+        displayName: String? = null,
+        email: String? = null
+    ) {
+        val profileRef = userDocRef(userId)
+        val profileSnap = try {
+            profileRef.get().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, profileRef.path)
+            throw e
+        }
+
+        val existingCreatures = try {
+            creaturesCollection(userId).get().await().documents.map { it.id }.toSet()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.LIST, creaturesCollection(userId).path)
+            throw e
+        }
+
+        val existingStats = try {
+            puzzleStatsCollection(userId).get().await().documents.map { it.id }.toSet()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.LIST, puzzleStatsCollection(userId).path)
+            throw e
+        }
+
+        val batch = db.batch()
+        var hasWrites = false
+
+        if (!profileSnap.exists()) {
+            batch.set(
+                profileRef,
+                FirestoreUserProfile.newProfileCreateMap(
+                    userId = userId,
+                    displayName = displayName,
+                    email = email
+                )
+            )
+            hasWrites = true
+        }
+
+        JungleLoreCatalog.creatures.forEachIndexed { idx, creature ->
+            if (creature.id !in existingCreatures) {
+                batch.set(
+                    creaturesCollection(userId).document(creature.id),
+                    FirestoreCreatureProgress.newCreateMap(
+                        userId = userId,
+                        creatureId = creature.id,
+                        discovered = idx == 0,
+                        bondLevel = if (idx == 0) 1 else 0,
+                        bondXp = if (idx == 0) 15 else 0
+                    )
+                )
+                hasWrites = true
+            }
+        }
+
+        PuzzleType.entries.forEach { type ->
+            if (type.id !in existingStats) {
+                batch.set(
+                    puzzleStatsCollection(userId).document(type.id),
+                    FirestorePuzzleStats.newCreateMap(
+                        userId = userId,
+                        puzzleType = type.id
+                    )
+                )
+                hasWrites = true
+            }
+        }
+
+        if (hasWrites) {
+            try {
+                batch.commit().await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleFirestoreError(e, OperationType.WRITE, profileRef.path)
+                throw e
+            }
+        }
+    }
+
+    suspend fun selectHero(userId: String, heroId: String) {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val hero = JungleLoreCatalog.heroById(heroId)
+        if (currentProfile.nectar >= hero.unlockNectar) {
+            updateProfileFields(
+                userId = userId,
+                fields = mapOf(
+                    "selectedHeroId" to hero.id,
+                    "explorerName" to hero.name
+                )
+            )
+        }
+    }
+
+    suspend fun craftOrEquipRelic(userId: String, relicId: String): String {
+        ensureSeeded(userId)
+        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val relic = JungleLoreCatalog.relicById(relicId)
+        val unlocked = current.unlockedRelicIds
+        return if (relic.id in unlocked) {
+            updateProfileFields(userId, mapOf("equippedRelicId" to relic.id))
+            "Equipped ${relic.name}!"
+        } else if (current.moonstones >= relic.shardCost) {
+            val newUnlocked = (unlocked + relic.id).joinToString(",")
+            updateProfileFields(
+                userId = userId,
+                fields = mapOf(
+                    "moonstones" to current.moonstones - relic.shardCost,
+                    "unlockedRelicsCsv" to newUnlocked,
+                    "equippedRelicId" to relic.id
+                )
+            )
+            "Forged & equipped ${relic.name}!"
+        } else {
+            "Need ${relic.shardCost} Moonstone Shards to forge ${relic.name}."
+        }
+    }
+
+    suspend fun recordPuzzleSolved(
+        userId: String,
+        puzzleType: PuzzleType,
+        difficulty: DifficultyTier,
+        levelPlayed: Int,
+        starsEarned: Int,
+        rawScore: Int
+    ): PuzzleCompletionResult {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val hero = JungleLoreCatalog.heroById(currentProfile.selectedHeroId)
+        val relic = JungleLoreCatalog.relicById(currentProfile.equippedRelicId)
+        val existingStats = getPuzzleStatsOnce(userId, puzzleType.id)
+            ?: PuzzleStatsEntity(puzzleType = puzzleType.id)
+
+        val nectarEarned = ((puzzleType.baseNectarReward + levelPlayed * 2) * difficulty.rewardMultiplier).roundToInt() +
+            hero.bonusNectarPerPuzzle + relic.bonusNectar
+        val moonstonesEarned = if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
+        val skillXpEarned = difficulty.xpBonus + starsEarned * 5 + (rawScore / 25).coerceAtMost(20) +
+            hero.bonusSkillXp
+        val heroExpGain = 35 + starsEarned * 10
+        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, heroExpGain)
+        val newStreak = currentProfile.currentStreak + 1
+        val updatedBestStreak = maxOf(currentProfile.bestStreak, newStreak)
+        val totalNectarAfter = currentProfile.nectar + nectarEarned
+
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "heroLevel" to newLevel,
+                "heroExp" to newExp,
+                "nectar" to totalNectarAfter,
+                "moonstones" to currentProfile.moonstones + moonstonesEarned,
+                "memoryXp" to currentProfile.memoryXp + if (puzzleType.skill == BrainSkill.MEMORY) skillXpEarned else 0,
+                "logicXp" to currentProfile.logicXp + if (puzzleType.skill == BrainSkill.LOGIC) skillXpEarned else 0,
+                "spatialXp" to currentProfile.spatialXp + if (puzzleType.skill == BrainSkill.SPATIAL) skillXpEarned else 0,
+                "deductionXp" to currentProfile.deductionXp + if (puzzleType.skill == BrainSkill.DEDUCTION) skillXpEarned else 0,
+                "observationXp" to currentProfile.observationXp + if (puzzleType.skill == BrainSkill.OBSERVATION) skillXpEarned else 0,
+                "currentStreak" to newStreak,
+                "bestStreak" to updatedBestStreak,
+                "totalPuzzlesSolved" to currentProfile.totalPuzzlesSolved + 1
+            )
+        )
+
+        val nextLevel = maxOf(existingStats.currentLevel, levelPlayed + 1)
+        val isNewBest = rawScore > existingStats.bestScore
+        val statsRef = puzzleStatsCollection(userId).document(puzzleType.id)
+        try {
+            statsRef.update(
+                mapOf(
+                    "currentLevel" to nextLevel,
+                    "totalStars" to existingStats.totalStars + starsEarned,
+                    "playedCount" to existingStats.playedCount + 1,
+                    "solvedCount" to existingStats.solvedCount + 1,
+                    "bestScore" to maxOf(existingStats.bestScore, rawScore),
+                    "bestStreak" to maxOf(existingStats.bestStreak, newStreak),
+                    "lastSolvedMillis" to System.currentTimeMillis(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, statsRef.path)
+            throw e
+        }
+
+        unlockBiomesForNectar(userId, totalNectarAfter)
+        syncDiscoveredLore(userId)
+
+        return PuzzleCompletionResult(
+            puzzleType = puzzleType,
+            difficulty = difficulty,
+            completedLevel = levelPlayed,
+            nextLevelUnlocked = nextLevel,
+            starsEarned = starsEarned,
+            score = rawScore,
+            nectarEarned = nectarEarned,
+            moonstonesEarned = moonstonesEarned,
+            skillXpEarned = skillXpEarned,
+            newBestScore = isNewBest
+        )
+    }
+
+    suspend fun recordStoryChoice(
+        userId: String,
+        biomeId: String,
+        creatureId: String,
+        rewardNectar: Int,
+        bondGain: Int,
+        rewardExp: Int
+    ) {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val hero = JungleLoreCatalog.heroById(currentProfile.selectedHeroId)
+        val newNectar = currentProfile.nectar + rewardNectar
+        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, rewardExp)
+        val updatedQuests = (currentProfile.completedQuestIds + biomeId).joinToString(",")
+
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "heroLevel" to newLevel,
+                "heroExp" to newExp,
+                "completedQuestsCsv" to updatedQuests,
+                "nectar" to newNectar,
+                "moonstones" to currentProfile.moonstones + 1
+            )
+        )
+        addCreatureBond(userId, creatureId, bondGain + hero.bonusBondXp)
+        unlockBiomesForNectar(userId, newNectar)
+        syncDiscoveredLore(userId)
+    }
+
+    suspend fun feedCreatureTreat(
+        userId: String,
+        creatureId: String,
+        nectarCost: Int = 10
+    ): Boolean {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        if (currentProfile.nectar < nectarCost) return false
+        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, 15)
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "heroLevel" to newLevel,
+                "heroExp" to newExp,
+                "nectar" to currentProfile.nectar - nectarCost
+            )
+        )
+        addCreatureBond(userId, creatureId, bondGain = 30, incrementTreats = true)
+        return true
+    }
+
+    suspend fun setGentleMode(userId: String, enabled: Boolean) {
+        ensureSeeded(userId)
+        updateProfileFields(userId, mapOf("gentleMode" to enabled))
+    }
+
+    suspend fun getCreatureOnce(userId: String, creatureId: String): CreatureProgressEntity? {
+        val ref = creaturesCollection(userId).document(creatureId)
+        return try {
+            val snap = ref.get().await()
+            if (!snap.exists()) null
+            else snap.toObject(
+                FirestoreCreatureProgress::class.java,
+                DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+            )?.toEntity()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun getPuzzleStatsOnce(userId: String, puzzleType: String): PuzzleStatsEntity? {
+        val ref = puzzleStatsCollection(userId).document(puzzleType)
+        return try {
+            val snap = ref.get().await()
+            if (!snap.exists()) null
+            else snap.toObject(
+                FirestorePuzzleStats::class.java,
+                DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+            )?.toEntity()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.GET, ref.path)
+            throw e
+        }
+    }
+
+    private suspend fun updateProfileFields(userId: String, fields: Map<String, Any>) {
+        val ref = userDocRef(userId)
+        try {
+            ref.update(fields + ("updatedAt" to FieldValue.serverTimestamp())).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, ref.path)
+            throw e
+        }
+    }
+
+    private fun applyHeroExp(level: Int, currentExp: Int, gained: Int): Pair<Int, Int> {
+        var lvl = level
+        var exp = currentExp + gained
+        while (exp >= lvl * 100) {
+            exp -= lvl * 100
+            lvl++
+        }
+        return lvl to exp
+    }
+
+    private suspend fun addCreatureBond(
+        userId: String,
+        creatureId: String,
+        bondGain: Int,
+        incrementTreats: Boolean = false
+    ) {
+        val ref = creaturesCollection(userId).document(creatureId)
+        val current = getCreatureOnce(userId, creatureId)
+        val currentXp = current?.bondXp ?: 0
+        val newXp = currentXp + bondGain
+        val newLevel = when {
+            newXp >= 120 -> 3
+            newXp >= 50 -> 2
+            else -> maxOf(1, current?.bondLevel ?: 1)
+        }
+        try {
+            if (current == null) {
+                ref.set(
+                    FirestoreCreatureProgress.newCreateMap(
+                        userId = userId,
+                        creatureId = creatureId,
+                        discovered = true,
+                        bondLevel = newLevel,
+                        bondXp = newXp,
+                        treatsFed = if (incrementTreats) 1 else 0,
+                        lastInteractionMillis = System.currentTimeMillis()
+                    )
+                ).await()
+            } else {
+                ref.update(
+                    mapOf(
+                        "discovered" to true,
+                        "bondXp" to newXp,
+                        "bondLevel" to newLevel,
+                        "treatsFed" to current.treatsFed + if (incrementTreats) 1 else 0,
+                        "lastInteractionMillis" to System.currentTimeMillis(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, ref.path)
+            throw e
+        }
+    }
+
+    private suspend fun unlockBiomesForNectar(userId: String, totalNectar: Int) {
+        JungleLoreCatalog.biomes.forEach { biome ->
+            if (totalNectar >= biome.unlockNectar) {
+                val existing = getCreatureOnce(userId, biome.creatureId)
+                val ref = creaturesCollection(userId).document(biome.creatureId)
+                try {
+                    if (existing == null) {
+                        ref.set(
+                            FirestoreCreatureProgress.newCreateMap(
+                                userId = userId,
+                                creatureId = biome.creatureId,
+                                discovered = true,
+                                bondLevel = 1,
+                                bondXp = 0
+                            )
+                        ).await()
+                    } else if (!existing.discovered) {
+                        ref.update(
+                            mapOf(
+                                "discovered" to true,
+                                "bondLevel" to maxOf(1, existing.bondLevel),
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        ).await()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    handleFirestoreError(e, OperationType.WRITE, ref.path)
+                    throw e
+                }
+            }
+        }
+    }
+
+    private suspend fun syncDiscoveredLore(userId: String) {
+        val current = getProfileOnce(userId) ?: return
+        val creaturesSnap = try {
+            creaturesCollection(userId).get().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.LIST, creaturesCollection(userId).path)
+            throw e
+        }
+
+        val discoveredCreatureIds = creaturesSnap.toObjects(
+            FirestoreCreatureProgress::class.java,
+            DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+        )
+            .filter { it.discovered }
+            .map { it.creatureId }
+            .toSet()
+
+        val updatedLoreIds = JungleLoreCatalog.loreEntries
+            .filter { entry ->
+                JungleLoreCatalog.isLoreDiscovered(
+                    entry = entry,
+                    nectar = current.nectar,
+                    totalPuzzlesSolved = current.totalPuzzlesSolved,
+                    completedQuests = current.completedQuestIds,
+                    discoveredCreatures = discoveredCreatureIds,
+                    savedLoreIds = current.discoveredLoreIds
+                )
+            }
+            .map { it.id }
+            .toSet()
+
+        if (updatedLoreIds != current.discoveredLoreIds) {
+            updateProfileFields(
+                userId = userId,
+                fields = mapOf("discoveredLoreCsv" to updatedLoreIds.joinToString(","))
+            )
+        }
+    }
+}

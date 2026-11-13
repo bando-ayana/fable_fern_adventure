@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Fernfable</string>
+    <string name="nav_grove">Grove</string>
+    <string name="nav_puzzles">Puzzles</string>
+    <string name="nav_bestiary">Creatures</string>
+    <string name="nav_skills">Brain Skills</string>
+    <string name="hero_subtitle">Mythical Jungle Sanctuary</string>
+    <string name="daily_quest_title">Canopy Whisper</string>
+    <string name="quick_puzzle_cta">Anytime Brain Teaser</string>
+    <string name="cd_jungle_hero">Enchanted mythical jungle sanctuary at golden twilight</string>
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_hint">Show a gentle puzzle hint</string>
+    <string name="cd_reset_puzzle">Start a fresh puzzle</string>
+    <string name="cd_nectar">Sunbeam Nectar</string>
+    <string name="cd_moonstone">Moonstone Shards</string>
+</resources>

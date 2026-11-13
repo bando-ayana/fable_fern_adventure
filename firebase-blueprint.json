@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated player RPG profile, cognitive skill XP, unlocked heroes, relics, quest completions, and discovered lore.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the profile owner." },
+        "explorerName": { "type": "string", "description": "Active explorer hero display name." },
+        "displayName": { "type": "string", "description": "Optional Google account display name." },
+        "email": { "type": "string", "description": "Optional private Google account email (owner-only read)." },
+        "selectedHeroId": { "type": "string", "description": "Active playable hero identifier." },
+        "heroLevel": { "type": "integer", "description": "Current RPG level (>= 1)." },
+        "heroExp": { "type": "integer", "description": "Current RPG experience points toward next level." },
+        "equippedRelicId": { "type": "string", "description": "Currently equipped Solari magitech relic ID." },
+        "unlockedRelicsCsv": { "type": "string", "description": "Comma-separated unlocked relic IDs." },
+        "completedQuestsCsv": { "type": "string", "description": "Comma-separated completed chapter biome IDs." },
+        "discoveredLoreCsv": { "type": "string", "description": "Comma-separated discovered lore chronicle IDs." },
+        "nectar": { "type": "integer", "description": "Sunbeam Nectar currency." },
+        "moonstones": { "type": "integer", "description": "Moonstone Shards currency." },
+        "memoryXp": { "type": "integer", "description": "Memory brain-skill XP." },
+        "logicXp": { "type": "integer", "description": "Logic brain-skill XP." },
+        "spatialXp": { "type": "integer", "description": "Spatial brain-skill XP." },
+        "deductionXp": { "type": "integer", "description": "Deduction brain-skill XP." },
+        "observationXp": { "type": "integer", "description": "Observation brain-skill XP." },
+        "currentStreak": { "type": "integer", "description": "Current consecutive solved puzzles." },
+        "bestStreak": { "type": "integer", "description": "Highest achieved puzzle streak." },
+        "totalPuzzlesSolved": { "type": "integer", "description": "Lifetime mini-puzzles completed." },
+        "gentleMode": { "type": "boolean", "description": "Whether Gentle Breeze accessibility mode is enabled." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of initial profile creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": [
+        "userId",
+        "explorerName",
+        "selectedHeroId",
+        "heroLevel",
+        "heroExp",
+        "equippedRelicId",
+        "unlockedRelicsCsv",
+        "completedQuestsCsv",
+        "discoveredLoreCsv",
+        "nectar",
+        "moonstones",
+        "memoryXp",
+        "logicXp",
+        "spatialXp",
+        "deductionXp",
+        "observationXp",
+        "currentStreak",
+        "bestStreak",
+        "totalPuzzlesSolved",
+        "gentleMode",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CreatureProgress": {
+      "title": "CreatureProgress",
+      "description": "Player bond and discovery progress for a mythical jungle creature.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "creatureId": { "type": "string", "description": "Unique creature identifier matching document ID." },
+        "discovered": { "type": "boolean", "description": "Whether the creature has been discovered." },
+        "bondLevel": { "type": "integer", "description": "Friendship bond tier (0-3)." },
+        "bondXp": { "type": "integer", "description": "Accumulated bond XP." },
+        "treatsFed": { "type": "integer", "description": "Number of favorite treats fed." },
+        "lastInteractionMillis": { "type": "integer", "description": "Epoch millis of last interaction." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp." }
+      },
+      "required": [
+        "userId",
+        "creatureId",
+        "discovered",
+        "bondLevel",
+        "bondXp",
+        "treatsFed",
+        "lastInteractionMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PuzzleStats": {
+      "title": "PuzzleStats",
+      "description": "Per-mini-puzzle progression, best scores, and level unlocks for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "puzzleType": { "type": "string", "description": "Mini-puzzle identifier matching document ID." },
+        "currentLevel": { "type": "integer", "description": "Current unlocked level (>= 1)." },
+        "totalStars": { "type": "integer", "description": "Cumulative stars earned in this puzzle." },
+        "playedCount": { "type": "integer", "description": "Total rounds played." },
+        "solvedCount": { "type": "integer", "description": "Total rounds solved." },
+        "bestScore": { "type": "integer", "description": "Highest recorded score." },
+        "bestStreak": { "type": "integer", "description": "Best streak recorded when solving this puzzle." },
+        "lastSolvedMillis": { "type": "integer", "description": "Epoch millis of last completion." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp." }
+      },
+      "required": [
+        "userId",
+        "puzzleType",
+        "currentLevel",
+        "totalStars",
+        "playedCount",
+        "solvedCount",
+        "bestScore",
+        "bestStreak",
+        "lastSolvedMillis",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores each authenticated explorer's RPG profile, progression, and private account metadata."
+    },
+    "/users/{userId}/creatures/{creatureId}": {
+      "schema": { "$ref": "#/entities/CreatureProgress" },
+      "description": "Stores discovery and bond progression for each mythical creature per user."
+    },
+    "/users/{userId}/puzzle_stats/{puzzleType}": {
+      "schema": { "$ref": "#/entities/PuzzleStats" },
+      "description": "Stores per-puzzle mastery, unlocked levels, and stars per user."
+    }
+  }
+}
