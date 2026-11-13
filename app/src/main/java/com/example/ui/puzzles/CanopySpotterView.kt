@@ -131,9 +131,10 @@ fun CanopySpotterView(
                 (fadeIn(tween(240)) + scaleIn(initialScale = 0.92f)) togetherWith fadeOut(tween(160))
             },
             label = "spotter_round_transition"
-        ) { _ ->
-            val columns = if (round.charms.size <= 4) 2 else 3
-            val rows = round.charms.chunked(columns)
+        ) { targetRound ->
+            val currentRound = puzzle.rounds.firstOrNull { it.roundNumber == targetRound } ?: round
+            val columns = if (currentRound.charms.size <= 4) 2 else 3
+            val rows = currentRound.charms.chunked(columns)
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -256,7 +257,11 @@ private fun CanopyCharmGlyph(
                         val py = cy + (sin(angle) * orbit).toFloat()
                         drawCircle(color = mainColor, radius = petalR, center = Offset(px, py))
                     }
-                    drawCircle(color = Color(0xFFFFF8DC), radius = minOf(w, h) * 0.14f, center = Offset(cx, cy))
+                    drawCircle(
+                        color = Color(0xFFFFF8DC),
+                        radius = minOf(w, h) * 0.14f,
+                        center = Offset(cx, cy)
+                    )
                 }
 
                 CharmBase.MUSHROOM -> {
