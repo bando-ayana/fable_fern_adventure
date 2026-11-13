@@ -86,6 +86,7 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                     }
                 }
             )
+
             FernfableApp(
                 viewModel = viewModel,
                 userEmail = user.email
