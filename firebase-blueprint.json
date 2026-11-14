@@ -27,6 +27,12 @@
         "bestStreak": { "type": "integer", "description": "Highest achieved puzzle streak." },
         "totalPuzzlesSolved": { "type": "integer", "description": "Lifetime mini-puzzles completed." },
         "gentleMode": { "type": "boolean", "description": "Whether Gentle Breeze accessibility mode is enabled." },
+        "mana": { "type": "integer", "description": "Current explorer Mana pool for spells and wild battles." },
+        "magicEssence": { "type": "integer", "description": "Arcane Magic earned from battles and missions to empower spell strength." },
+        "communityProsperity": { "type": "integer", "description": "Solari Canopy community restoration progress (0-100+)." },
+        "completedMissionsCsv": { "type": "string", "description": "Comma-separated completed community mission IDs." },
+        "lootBagCsv": { "type": "string", "description": "Serialized battle loot inventory (item:count CSV)." },
+        "canopyRestored": { "type": "boolean", "description": "Whether the final Heartwood expedition has been beaten to restore the Canopy." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of initial profile creation." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
       },
@@ -51,6 +57,12 @@
         "bestStreak",
         "totalPuzzlesSolved",
         "gentleMode",
+        "mana",
+        "magicEssence",
+        "communityProsperity",
+        "completedMissionsCsv",
+        "lootBagCsv",
+        "canopyRestored",
         "createdAt",
         "updatedAt"
       ]
@@ -84,11 +96,12 @@
     },
     "PuzzleStats": {
       "title": "PuzzleStats",
-      "description": "Per-mini-puzzle progression, best scores, and level unlocks for a user.",
+      "description": "Per-mini-puzzle progression, best scores, RPG unlock state, and level unlocks for a user.",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
         "puzzleType": { "type": "string", "description": "Mini-puzzle identifier matching document ID." },
+        "accessed": { "type": "boolean", "description": "Whether the player has accessed this puzzle during RPG gameplay." },
         "currentLevel": { "type": "integer", "description": "Current unlocked level (>= 1)." },
         "totalStars": { "type": "integer", "description": "Cumulative stars earned in this puzzle." },
         "playedCount": { "type": "integer", "description": "Total rounds played." },
@@ -102,6 +115,7 @@
       "required": [
         "userId",
         "puzzleType",
+        "accessed",
         "currentLevel",
         "totalStars",
         "playedCount",
