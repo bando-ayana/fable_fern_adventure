@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Fernfable</string>
     <string name="nav_grove">Grove</string>
+    <string name="nav_missions">Missions</string>
     <string name="nav_puzzles">Puzzles</string>
     <string name="nav_bestiary">Creatures</string>
     <string name="nav_skills">Brain Skills</string>
@@ -13,4 +14,8 @@
     <string name="cd_reset_puzzle">Start a fresh puzzle</string>
     <string name="cd_nectar">Sunbeam Nectar</string>
     <string name="cd_moonstone">Moonstone Shards</string>
+    <string name="cd_toggle_audio">Toggle RPG music and jungle ambience</string>
+    <string name="audio_rpg_music_on">RPG Music On</string>
+    <string name="audio_jungle_ambience_on">Jungle Ambience On</string>
+    <string name="audio_muted">Sound Muted</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,13 +21,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Forest
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Refresh
@@ -43,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -68,7 +73,7 @@ import com.example.puzzle.MushroomMelodyPuzzle
 import com.example.puzzle.SpiritLockPuzzle
 import com.example.puzzle.SpiritRune
 import com.example.puzzle.VineWeaverBoard
-import com.example.ui.FireflyEchoUiState
+import com.example.stateHolder.FireflyEchoUiState
 import com.example.ui.puzzles.CanopySpotterView
 import com.example.ui.puzzles.FernMosaicView
 import com.example.ui.puzzles.FireflyEchoView
@@ -85,6 +90,8 @@ fun PuzzlePlayScreen(
     level: Int,
     difficulty: DifficultyTier,
     gentleMode: Boolean,
+    isAudioMuted: Boolean = false,
+    onToggleAudioMute: () -> Unit = {},
     fireflyState: FireflyEchoUiState,
     mushroomState: MushroomMelodyPuzzle?,
     mushroomSelectedSlot: Int?,
@@ -212,6 +219,82 @@ fun PuzzlePlayScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (isAudioMuted) {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
+                    },
+                    border = BorderStroke(
+                        1.dp,
+                        if (isAudioMuted) {
+                            MaterialTheme.colorScheme.outlineVariant
+                        } else {
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .minimumInteractiveComponentSize()
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onToggleAudioMute)
+                        .testTag("puzzle_audio_toggle")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Forest,
+                                contentDescription = null,
+                                tint = if (isAudioMuted) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.secondary
+                                },
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = stringResource(
+                                    if (isAudioMuted) {
+                                        R.string.audio_muted
+                                    } else {
+                                        R.string.audio_jungle_ambience_on
+                                    }
+                                ),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isAudioMuted) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                }
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isAudioMuted) {
+                                Icons.AutoMirrored.Rounded.VolumeOff
+                            } else {
+                                Icons.AutoMirrored.Rounded.VolumeUp
+                            },
+                            contentDescription = stringResource(R.string.cd_toggle_audio),
+                            tint = if (isAudioMuted) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.secondary
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 AnimatedVisibility(visible = showGuide) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -308,11 +391,11 @@ fun PuzzlePlayScreen(
                 AnimatedVisibility(
                     visible = completionResult != null,
                     enter = fadeIn(tween(240)) +
-                        slideInVertically(initialOffsetY = { it / 4 }) +
-                        scaleIn(
-                            initialScale = 0.9f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                        ),
+                            slideInVertically(initialOffsetY = { it / 4 }) +
+                            scaleIn(
+                                initialScale = 0.9f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                            ),
                     exit = fadeOut(tween(150))
                 ) {
                     val result = completionResult
@@ -325,6 +408,11 @@ fun PuzzlePlayScreen(
                                     val next = result.nextLevelUnlocked
                                     onDismissCompletion()
                                     onRestartLevel(next)
+                                },
+                                onReplayLevel = {
+                                    val current = result.completedLevel
+                                    onDismissCompletion()
+                                    onRestartLevel(current)
                                 },
                                 onReturn = {
                                     onDismissCompletion()
@@ -343,6 +431,7 @@ fun PuzzlePlayScreen(
 private fun PuzzleCelebrationCard(
     result: PuzzleCompletionResult,
     onNextLevel: () -> Unit,
+    onReplayLevel: () -> Unit,
     onReturn: () -> Unit
 ) {
     Surface(
@@ -409,6 +498,12 @@ private fun PuzzleCelebrationCard(
                 ) {
                     Text("Sanctuary")
                 }
+            }
+            androidx.compose.material3.TextButton(
+                onClick = onReplayLevel,
+                modifier = Modifier.testTag("celebration_replay_level_button")
+            ) {
+                Text("Replay Level ${result.completedLevel} for Higher Score")
             }
         }
     }

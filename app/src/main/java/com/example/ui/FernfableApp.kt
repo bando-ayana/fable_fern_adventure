@@ -9,10 +9,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,9 +49,11 @@ import com.example.R
 import com.example.model.PuzzleType
 import com.example.navigation.FernfableRoutes
 import com.example.navigation.TopDestination
+import com.example.stateHolder.FernfableUiState
 import com.example.ui.screens.BestiaryScreen
 import com.example.ui.screens.BrainSkillsScreen
 import com.example.ui.screens.GroveScreen
+import com.example.ui.screens.MissionsScreen
 import com.example.ui.screens.PuzzleHubScreen
 import com.example.ui.screens.PuzzlePlayScreen
 
@@ -74,6 +78,13 @@ private val topDestinations = listOf(
         selectedIcon = Icons.Rounded.AutoStories,
         unselectedIcon = Icons.Outlined.AutoStories,
         testTag = "nav_bestiary"
+    ),
+    TopDestination(
+        route = FernfableRoutes.MISSIONS,
+        labelRes = R.string.nav_missions,
+        selectedIcon = Icons.Rounded.Flag,
+        unselectedIcon = Icons.Outlined.Flag,
+        testTag = "nav_missions"
     ),
     TopDestination(
         route = FernfableRoutes.SKILLS,
@@ -116,8 +127,12 @@ fun FernfableApp(
         }
     }
 
-    fun launchPuzzle(type: PuzzleType, levelOverride: Int? = null) {
-        viewModel.startPuzzle(type, levelOverride)
+    fun launchPuzzle(
+        type: PuzzleType,
+        levelOverride: Int? = null,
+        accessedFromRpg: Boolean = true
+    ) {
+        viewModel.startPuzzle(type, levelOverride, accessedFromRpg)
         navController.navigate(FernfableRoutes.PLAY_PUZZLE) {
             launchSingleTop = true
         }
@@ -143,7 +158,7 @@ fun JungleAtmosphereBackground(
     isPlayingPuzzle: Boolean,
     snackbarHostState: SnackbarHostState,
     navigateTop: (String) -> Unit,
-    launchPuzzle: (PuzzleType, Int?) -> Unit,
+    launchPuzzle: (PuzzleType, Int?, Boolean) -> Unit,
     onSignOut: () -> Unit,
     userEmail: String?,
     backStackEntry: NavBackStackEntry?,
@@ -166,6 +181,8 @@ fun JungleAtmosphereBackground(
     val vineWeaverState by viewModel.vineWeaverState.collectAsStateWithLifecycle()
     val spiritLockState by viewModel.spiritLockState.collectAsStateWithLifecycle()
     val completionResult by viewModel.completionResult.collectAsStateWithLifecycle()
+    val activeBattle by viewModel.activeBattle.collectAsStateWithLifecycle()
+    val missionSummary by viewModel.missionSummary.collectAsStateWithLifecycle()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val useRail = screenWidthDp >= 600
 
@@ -247,8 +264,26 @@ fun JungleAtmosphereBackground(
                         onChooseStoryOption = viewModel::chooseStoryOption,
                         onSelectHero = viewModel::selectHero,
                         onCraftOrEquipRelic = viewModel::craftOrEquipRelic,
-                        onLaunchPuzzle = { puzzleType -> launchPuzzle(puzzleType, null) },
-                        onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) }
+                        onLaunchPuzzle = { puzzleType -> launchPuzzle(puzzleType, null, true) },
+                        onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
+                        onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) }
+                    )
+                }
+
+                composable(FernfableRoutes.MISSIONS) {
+                    MissionsScreen(
+                        uiState = uiState,
+                        activeBattle = activeBattle,
+                        missionSummary = missionSummary,
+                        onStartMission = viewModel::startMission,
+                        onAdvanceCommunityStep = viewModel::advanceMissionCommunityStep,
+                        onPerformBattleAction = viewModel::performBattleAction,
+                        onUseBattleLoot = viewModel::useBattleLoot,
+                        onRetreatFromBattle = viewModel::retreatFromBattle,
+                        onDismissMissionSheet = viewModel::dismissMissionSheet,
+                        onRestMana = viewModel::restManaAtSanctuary,
+                        onBrewLoot = viewModel::brewBattleLoot,
+                        onLaunchPuzzle = { puzzleType -> launchPuzzle(puzzleType, null, true) }
                     )
                 }
 
@@ -257,7 +292,9 @@ fun JungleAtmosphereBackground(
                         uiState = uiState,
                         onSelectDifficulty = viewModel::setDifficulty,
                         onToggleGentleMode = viewModel::setGentleMode,
-                        onStartPuzzle = { puzzleType, level -> launchPuzzle(puzzleType, level) }
+                        onStartPuzzle = { puzzleType, level -> launchPuzzle(puzzleType, level, true) },
+                        onNavigateToGrove = { navigateTop(FernfableRoutes.GROVE) },
+                        onNavigateToMissions = { navigateTop(FernfableRoutes.MISSIONS) }
                     )
                 }
 
@@ -265,14 +302,15 @@ fun JungleAtmosphereBackground(
                     BestiaryScreen(
                         uiState = uiState,
                         onFeedCreature = viewModel::feedCreature,
-                        onPlaySignaturePuzzle = { puzzleType -> launchPuzzle(puzzleType, null) }
+                        onPlaySignaturePuzzle = { type, _, bool -> launchPuzzle(type, null, bool) }
                     )
                 }
 
                 composable(FernfableRoutes.SKILLS) {
                     BrainSkillsScreen(
                         uiState = uiState,
-                        onTrainSkill = { puzzleType -> launchPuzzle(puzzleType, null) }
+                        onTrainSkill = { puzzleType -> launchPuzzle(puzzleType, null, false) },
+                        onExploreRpg = { navigateTop(FernfableRoutes.GROVE) }
                     )
                 }
 
@@ -298,7 +336,12 @@ fun JungleAtmosphereBackground(
                             viewModel.dismissCompletion()
                             navController.popBackStack()
                         },
-                        onRestartLevel = { level -> viewModel.startPuzzle(activePuzzleType, level) },
+                        onRestartLevel = { level ->
+                            viewModel.startPuzzle(
+                                activePuzzleType,
+                                level
+                            )
+                        },
                         onTapBlossom = viewModel::tapFireflyBlossom,
                         onReplayFireflyHint = viewModel::replayFireflyHint,
                         onTapMushroomSlot = viewModel::tapMushroomSlot,

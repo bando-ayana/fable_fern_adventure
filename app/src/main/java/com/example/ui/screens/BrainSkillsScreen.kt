@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -37,7 +38,7 @@ import com.example.data.local.PuzzleStatsEntity
 import com.example.model.BadgeDefinition
 import com.example.model.BrainSkill
 import com.example.model.PuzzleType
-import com.example.ui.FernfableUiState
+import com.example.stateHolder.FernfableUiState
 import com.example.ui.components.SkillRadarChart
 import com.example.ui.theme.FireflyGoldAccent
 
@@ -45,6 +46,7 @@ import com.example.ui.theme.FireflyGoldAccent
 fun BrainSkillsScreen(
     uiState: FernfableUiState,
     onTrainSkill: (PuzzleType) -> Unit,
+    onExploreRpg: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val profile = uiState.profile
@@ -122,6 +124,7 @@ fun BrainSkillsScreen(
                     BrainSkill.OBSERVATION -> profile.observationXp
                 }
                 val matchingPuzzle = PuzzleType.entries.first { it.skill == skill }
+                val isPuzzleAccessed = uiState.puzzleStats[matchingPuzzle]?.accessed == true
                 val (icon, accent) = skillStyle(skill)
                 val level = (xp / 60) + 1
                 val levelProgress = (xp % 60) / 60f
@@ -168,7 +171,11 @@ fun BrainSkillsScreen(
                                 )
                             }
                             Text(
-                                text = skill.subtitle,
+                                text = if (isPuzzleAccessed) {
+                                    "${skill.subtitle} · ${matchingPuzzle.title} unlocked"
+                                } else {
+                                    "Access ${matchingPuzzle.title} in RPG to train here"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -182,10 +189,20 @@ fun BrainSkillsScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         FilledTonalButton(
-                            onClick = { onTrainSkill(matchingPuzzle) },
+                            onClick = {
+                                if (isPuzzleAccessed) onTrainSkill(matchingPuzzle) else onExploreRpg()
+                            },
                             modifier = Modifier.testTag("train_skill_${skill.name.lowercase()}")
                         ) {
-                            Text("Train")
+                            if (!isPuzzleAccessed) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Lock,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            Text(if (isPuzzleAccessed) "Replay" else "Find in RPG")
                         }
                     }
                 }

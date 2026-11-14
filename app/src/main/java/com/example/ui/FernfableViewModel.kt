@@ -6,11 +6,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.GameRepository
 import com.example.data.JungleLoreCatalog
-import com.example.data.local.CreatureProgressEntity
-import com.example.data.local.PlayerProfileEntity
-import com.example.data.local.PuzzleStatsEntity
+import com.example.data.RpgMissionCatalog
 import com.example.model.BiomeNode
+import com.example.model.CommunityMission
 import com.example.model.DifficultyTier
+import com.example.model.LootItemType
+import com.example.model.MissionCompletionSummary
 import com.example.model.PuzzleCompletionResult
 import com.example.model.PuzzleType
 import com.example.model.StoryChoice
@@ -19,7 +20,6 @@ import com.example.puzzle.CanopySpotterPuzzle
 import com.example.puzzle.FernMosaicEngine
 import com.example.puzzle.FernMosaicPuzzle
 import com.example.puzzle.FireflyEchoEngine
-import com.example.puzzle.FireflyRound
 import com.example.puzzle.GroveGridEngine
 import com.example.puzzle.GroveGridPuzzle
 import com.example.puzzle.LeafToken
@@ -30,6 +30,12 @@ import com.example.puzzle.SpiritLockPuzzle
 import com.example.puzzle.SpiritRune
 import com.example.puzzle.VineWeaverBoard
 import com.example.puzzle.VineWeaverEngine
+import com.example.rpg.BattleActionType
+import com.example.rpg.BattlePhase
+import com.example.rpg.RpgBattleEngine
+import com.example.rpg.RpgBattleState
+import com.example.stateHolder.FernfableUiState
+import com.example.stateHolder.FireflyEchoUiState
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -42,29 +48,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-data class FernfableUiState(
-    val profile: PlayerProfileEntity = PlayerProfileEntity(),
-    val creatureProgress: Map<String, CreatureProgressEntity> = emptyMap(),
-    val puzzleStats: Map<PuzzleType, PuzzleStatsEntity> = emptyMap(),
-    val selectedDifficulty: DifficultyTier = DifficultyTier.SPROUT,
-    val snackbarMessage: String? = null,
-    val syncError: String? = null
-)
-
-data class FireflyEchoUiState(
-    val rounds: List<FireflyRound> = emptyList(),
-    val currentRoundIdx: Int = 0,
-    val isPlayingSequence: Boolean = false,
-    val activeBlossomIdx: Int? = null,
-    val userInput: List<Int> = emptyList(),
-    val mistakes: Int = 0,
-    val hintsUsed: Int = 0,
-    val statusBanner: String = "Watch the lantern blossoms glow...",
-    val errorFlashIdx: Int? = null
-) {
-    val currentRound: FireflyRound? get() = rounds.getOrNull(currentRoundIdx)
-}
 
 class FernfableViewModel(
     private val repository: GameRepository,
@@ -157,6 +140,13 @@ class FernfableViewModel(
     private val _completionResult = MutableStateFlow<PuzzleCompletionResult?>(null)
     val completionResult: StateFlow<PuzzleCompletionResult?> = _completionResult.asStateFlow()
 
+    // RPG Community Missions & Wild Creature Battle state
+    private val _activeBattle = MutableStateFlow<RpgBattleState?>(null)
+    val activeBattle: StateFlow<RpgBattleState?> = _activeBattle.asStateFlow()
+
+    private val _missionSummary = MutableStateFlow<MissionCompletionSummary?>(null)
+    val missionSummary: StateFlow<MissionCompletionSummary?> = _missionSummary.asStateFlow()
+
     private var playbackJob: kotlinx.coroutines.Job? = null
 
     init {
@@ -167,7 +157,8 @@ class FernfableViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Initial sanctuary seed failed", e)
-                _snackbarMessage.value = e.localizedMessage ?: "Couldn't initialize cloud sanctuary."
+                _snackbarMessage.value =
+                    e.localizedMessage ?: "Couldn't initialize cloud sanctuary."
             }
         }
     }
@@ -197,7 +188,8 @@ class FernfableViewModel(
                     _snackbarMessage.value = "Now adventuring as ${hero.name} (${hero.title})!"
                 }
             } else {
-                _snackbarMessage.value = "Gather ${hero.unlockNectar} Sunbeam Nectar to welcome ${hero.name}!"
+                _snackbarMessage.value =
+                    "Gather ${hero.unlockNectar} Sunbeam Nectar to welcome ${hero.name}!"
             }
         }
     }
@@ -261,14 +253,27 @@ class FernfableViewModel(
         }
     }
 
-    fun startPuzzle(type: PuzzleType, levelOverride: Int? = null) {
+    fun startPuzzle(
+        type: PuzzleType,
+        levelOverride: Int? = null,
+        accessedFromRpg: Boolean = true
+    ) {
         playbackJob?.cancel()
         _activePuzzleType.value = type
         _completionResult.value = null
         val diff = _selectedDifficulty.value
-        val currentSavedLevel = uiState.value.puzzleStats[type]?.currentLevel ?: 1
+        val existingStats = uiState.value.puzzleStats[type]
+        val currentSavedLevel = existingStats?.currentLevel ?: 1
         val level = (levelOverride ?: currentSavedLevel).coerceAtLeast(1)
         _activePuzzleLevel.value = level
+
+        if (accessedFromRpg && existingStats?.accessed != true) {
+            viewModelScope.launch {
+                runRepositoryAction {
+                    repository.markPuzzleAccessed(currentUserId, type)
+                }
+            }
+        }
 
         when (type) {
             PuzzleType.FIREFLY_ECHO -> {
@@ -605,7 +610,8 @@ class FernfableViewModel(
         _groveGridState.value = updated
 
         if (GroveGridEngine.isSolved(newBoard)) {
-            val score = GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
+            val score =
+                GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
             val stars = when {
                 gridHints == 0 -> 3
                 gridHints <= 2 -> 2
@@ -627,12 +633,14 @@ class FernfableViewModel(
             ?: return
 
         gridHints++
-        val newBoard = puzzle.board.toMutableList().apply { this[targetCell] = puzzle.solution[targetCell] }
+        val newBoard =
+            puzzle.board.toMutableList().apply { this[targetCell] = puzzle.solution[targetCell] }
         _groveGridState.value = puzzle.copy(board = newBoard)
         _selectedGridCell.value = newBoard.indexOfFirst { it == 0 }.takeIf { it >= 0 }
 
         if (GroveGridEngine.isSolved(newBoard)) {
-            val score = GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
+            val score =
+                GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
             val stars = when {
                 gridHints == 0 -> 3
                 gridHints <= 2 -> 2
@@ -653,7 +661,8 @@ class FernfableViewModel(
         _vineWeaverState.value = updated
 
         if (updated.moonflowerBloomed) {
-            val score = VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
+            val score =
+                VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
             val stars = when {
                 vineHints == 0 -> 3
                 vineHints <= 2 -> 2
@@ -672,7 +681,8 @@ class FernfableViewModel(
         _vineWeaverState.value = updated
 
         if (updated.moonflowerBloomed) {
-            val score = VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
+            val score =
+                VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
             val stars = when {
                 vineHints == 0 -> 3
                 vineHints <= 2 -> 2
@@ -744,6 +754,106 @@ class FernfableViewModel(
                     rawScore = rawScore
                 )
                 _completionResult.value = result
+            }
+        }
+    }
+
+    // --- RPG Community Missions & Wild Creature Battles ---
+
+    fun startMission(mission: CommunityMission) {
+        val profile = uiState.value.profile
+        if (!mission.isWildPatrol && profile.communityProsperity < mission.requiredProsperity) {
+            _snackbarMessage.value = "Build ${mission.requiredProsperity}% Community Prosperity first!"
+            return
+        }
+        val loot = RpgMissionCatalog.parseLootBag(profile.lootBagCsv)
+        _missionSummary.value = null
+        _activeBattle.value = RpgBattleEngine.createBattleState(
+            mission = mission,
+            profile = profile,
+            lootAvailable = loot
+        )
+    }
+
+    fun advanceMissionCommunityStep() {
+        val current = _activeBattle.value ?: return
+        if (current.phase != BattlePhase.COMMUNITY_PREP) return
+        _activeBattle.value = RpgBattleEngine.beginWildEncounter(current)
+    }
+
+    fun performBattleAction(action: BattleActionType) {
+        val current = _activeBattle.value ?: return
+        if (current.phase != BattlePhase.ACTIVE_COMBAT) return
+        val updated = RpgBattleEngine.performAction(current, action)
+        _activeBattle.value = updated
+        if (updated.phase == BattlePhase.VICTORY || updated.phase == BattlePhase.RETREATED) {
+            finalizeMissionBattle(updated)
+        }
+    }
+
+    fun useBattleLoot(item: LootItemType) {
+        val current = _activeBattle.value ?: return
+        if (current.phase != BattlePhase.ACTIVE_COMBAT) return
+        val updated = RpgBattleEngine.useLootItem(current, item)
+        _activeBattle.value = updated
+        if (updated.phase == BattlePhase.VICTORY) {
+            finalizeMissionBattle(updated)
+        }
+    }
+
+    fun retreatFromBattle() {
+        val current = _activeBattle.value ?: return
+        if (current.phase == BattlePhase.COMMUNITY_PREP) {
+            _activeBattle.value = null
+            return
+        }
+        val retreated = current.copy(
+            phase = BattlePhase.RETREATED,
+            combatLog = (listOf("${current.heroName} withdrew back to Solari Canopy!") + current.combatLog).take(6)
+        )
+        _activeBattle.value = retreated
+        finalizeMissionBattle(retreated)
+    }
+
+    fun dismissMissionSheet() {
+        _activeBattle.value = null
+        _missionSummary.value = null
+    }
+
+    fun restManaAtSanctuary() {
+        viewModelScope.launch {
+            runRepositoryAction {
+                val maxMana = repository.restAtSanctuary(currentUserId)
+                _snackbarMessage.value = "Mana restored to $maxMana/$maxMana at the Sanctuary!"
+            }
+        }
+    }
+
+    fun brewBattleLoot(item: LootItemType) {
+        viewModelScope.launch {
+            runRepositoryAction {
+                val success = repository.brewBattleLoot(currentUserId, item)
+                _snackbarMessage.value = if (success) {
+                    "Crafted 1 ${item.displayName} for your battle satchel!"
+                } else {
+                    "Need 12 Sunbeam Nectar to brew ${item.displayName}."
+                }
+            }
+        }
+    }
+
+    private fun finalizeMissionBattle(finalState: RpgBattleState) {
+        viewModelScope.launch {
+            runRepositoryAction {
+                val summary = repository.recordMissionOutcome(
+                    userId = currentUserId,
+                    mission = finalState.mission,
+                    victory = finalState.phase == BattlePhase.VICTORY,
+                    calmedSpirit = finalState.calmedSpirit,
+                    remainingMana = finalState.heroMana,
+                    usedLootInBattle = finalState.usedLootInBattle
+                )
+                _missionSummary.value = summary
             }
         }
     }

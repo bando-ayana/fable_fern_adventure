@@ -34,6 +34,12 @@ data class FirestoreUserProfile(
     val bestStreak: Int = 0,
     val totalPuzzlesSolved: Int = 0,
     val gentleMode: Boolean = true,
+    val mana: Int = 40,
+    val magicEssence: Int = 0,
+    val communityProsperity: Int = 0,
+    val completedMissionsCsv: String = "",
+    val lootBagCsv: String = "sunberry_tonic:2,mana_vial:1",
+    val canopyRestored: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
@@ -57,7 +63,13 @@ data class FirestoreUserProfile(
         currentStreak = currentStreak,
         bestStreak = bestStreak,
         totalPuzzlesSolved = totalPuzzlesSolved,
-        gentleMode = gentleMode
+        gentleMode = gentleMode,
+        mana = mana,
+        magicEssence = magicEssence,
+        communityProsperity = communityProsperity,
+        completedMissionsCsv = completedMissionsCsv,
+        lootBagCsv = lootBagCsv,
+        canopyRestored = canopyRestored
     )
 
     companion object {
@@ -91,6 +103,12 @@ data class FirestoreUserProfile(
                 "bestStreak" to defaults.bestStreak,
                 "totalPuzzlesSolved" to defaults.totalPuzzlesSolved,
                 "gentleMode" to defaults.gentleMode,
+                "mana" to defaults.mana,
+                "magicEssence" to defaults.magicEssence,
+                "communityProsperity" to defaults.communityProsperity,
+                "completedMissionsCsv" to defaults.completedMissionsCsv,
+                "lootBagCsv" to defaults.lootBagCsv,
+                "canopyRestored" to defaults.canopyRestored,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             ).filterValues { it != null } as Map<String, Any>
@@ -148,6 +166,7 @@ data class FirestorePuzzleStats(
     @DocumentId val id: String = "",
     val userId: String = "",
     val puzzleType: String = "",
+    val accessed: Boolean = false,
     val currentLevel: Int = 1,
     val totalStars: Int = 0,
     val playedCount: Int = 0,
@@ -160,6 +179,7 @@ data class FirestorePuzzleStats(
 ) {
     fun toEntity(): PuzzleStatsEntity = PuzzleStatsEntity(
         puzzleType = puzzleType.ifBlank { id },
+        accessed = accessed,
         currentLevel = currentLevel,
         totalStars = totalStars,
         playedCount = playedCount,
@@ -173,6 +193,7 @@ data class FirestorePuzzleStats(
         fun newCreateMap(
             userId: String,
             puzzleType: String,
+            accessed: Boolean = false,
             currentLevel: Int = 1,
             totalStars: Int = 0,
             playedCount: Int = 0,
@@ -183,6 +204,7 @@ data class FirestorePuzzleStats(
         ): Map<String, Any> = mapOf(
             "userId" to userId,
             "puzzleType" to puzzleType,
+            "accessed" to accessed,
             "currentLevel" to currentLevel,
             "totalStars" to totalStars,
             "playedCount" to playedCount,

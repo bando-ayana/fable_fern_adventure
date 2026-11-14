@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.JungleLoreCatalog
 import com.example.model.MythicalCreature
 import com.example.model.PuzzleType
-import com.example.ui.FernfableUiState
+import com.example.stateHolder.FernfableUiState
 import com.example.ui.components.CreaturePortrait
 import com.example.ui.theme.FireflyGoldAccent
 
@@ -55,7 +55,7 @@ import com.example.ui.theme.FireflyGoldAccent
 fun BestiaryScreen(
     uiState: FernfableUiState,
     onFeedCreature: (String) -> Unit,
-    onPlaySignaturePuzzle: (PuzzleType) -> Unit,
+    onPlaySignaturePuzzle: (PuzzleType, Int?, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedCreature by remember { mutableStateOf<MythicalCreature?>(null) }
@@ -240,7 +240,7 @@ fun BestiaryScreen(
                     FilledTonalButton(
                         onClick = {
                             selectedCreature = null
-                            onPlaySignaturePuzzle(currentSelected.signaturePuzzle)
+                            onPlaySignaturePuzzle(currentSelected.signaturePuzzle, null, true)
                         },
                         modifier = Modifier
                             .weight(1f)

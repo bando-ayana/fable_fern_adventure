@@ -11,7 +11,10 @@ import com.example.data.remote.FirestoreUserProfile
 import com.example.data.remote.OperationType
 import com.example.data.remote.handleFirestoreError
 import com.example.model.BrainSkill
+import com.example.model.CommunityMission
 import com.example.model.DifficultyTier
+import com.example.model.LootItemType
+import com.example.model.MissionCompletionSummary
 import com.example.model.PuzzleCompletionResult
 import com.example.model.PuzzleType
 import com.google.firebase.firestore.DocumentSnapshot
@@ -114,14 +117,15 @@ class GameRepository(private val db: FirebaseFirestore) {
             throw e
         }
 
-        val existingStats = try {
-            puzzleStatsCollection(userId).get().await().documents.map { it.id }.toSet()
+        val existingStatsDocs = try {
+            puzzleStatsCollection(userId).get().await().documents
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.LIST, puzzleStatsCollection(userId).path)
             throw e
         }
+        val existingStatsById = existingStatsDocs.associateBy { it.id }
 
         val batch = db.batch()
         var hasWrites = false
@@ -135,6 +139,29 @@ class GameRepository(private val db: FirebaseFirestore) {
                     email = email
                 )
             )
+            hasWrites = true
+        }else if (!profileSnap.contains("mana") ||
+            !profileSnap.contains("magicEssence") ||
+            !profileSnap.contains("communityProsperity") ||
+            !profileSnap.contains("completedMissionsCsv") ||
+            !profileSnap.contains("lootBagCsv") ||
+            !profileSnap.contains("canopyRestored")
+        ) {
+            val defaults = PlayerProfileEntity()
+            val migrationPatch = mutableMapOf<String, Any>()
+            if (!profileSnap.contains("mana")) migrationPatch["mana"] = defaults.mana
+            if (!profileSnap.contains("magicEssence")) migrationPatch["magicEssence"] =
+                defaults.magicEssence
+            if (!profileSnap.contains("communityProsperity")) migrationPatch["communityProsperity"] =
+                defaults.communityProsperity
+            if (!profileSnap.contains("completedMissionsCsv")) migrationPatch["completedMissionsCsv"] =
+                defaults.completedMissionsCsv
+            if (!profileSnap.contains("lootBagCsv")) migrationPatch["lootBagCsv"] =
+                defaults.lootBagCsv
+            if (!profileSnap.contains("canopyRestored")) migrationPatch["canopyRestored"] =
+                defaults.canopyRestored
+            migrationPatch["updatedAt"] = FieldValue.serverTimestamp()
+            batch.update(profileRef, migrationPatch)
             hasWrites = true
         }
 
@@ -155,12 +182,27 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
 
         PuzzleType.entries.forEach { type ->
-            if (type.id !in existingStats) {
+            val existingDoc = existingStatsById[type.id]
+            if (existingDoc == null) {
                 batch.set(
                     puzzleStatsCollection(userId).document(type.id),
                     FirestorePuzzleStats.newCreateMap(
                         userId = userId,
-                        puzzleType = type.id
+                        puzzleType = type.id,
+                        accessed = false
+                    )
+                )
+                hasWrites = true
+            } else if (!existingDoc.contains("accessed")) {
+                val playedCount = (existingDoc.getLong("playedCount") ?: 0L).toInt()
+                val solvedCount = (existingDoc.getLong("solvedCount") ?: 0L).toInt()
+                val currentLevel = (existingDoc.getLong("currentLevel") ?: 1L).toInt()
+                val inferredAccessed = playedCount > 0 || solvedCount > 0 || currentLevel > 1
+                batch.update(
+                    existingDoc.reference,
+                    mapOf(
+                        "accessed" to inferredAccessed,
+                        "updatedAt" to FieldValue.serverTimestamp()
                     )
                 )
                 hasWrites = true
@@ -218,6 +260,26 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun markPuzzleAccessed(userId: String, puzzleType: PuzzleType) {
+        ensureSeeded(userId)
+        val existing = getPuzzleStatsOnce(userId, puzzleType.id)
+        if (existing?.accessed == true) return
+        val statsRef = puzzleStatsCollection(userId).document(puzzleType.id)
+        try {
+            statsRef.update(
+                mapOf(
+                    "accessed" to true,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, statsRef.path)
+            throw e
+        }
+    }
+
     suspend fun recordPuzzleSolved(
         userId: String,
         puzzleType: PuzzleType,
@@ -268,6 +330,7 @@ class GameRepository(private val db: FirebaseFirestore) {
         try {
             statsRef.update(
                 mapOf(
+                    "accessed" to true,
                     "currentLevel" to nextLevel,
                     "totalStars" to existingStats.totalStars + starsEarned,
                     "playedCount" to existingStats.playedCount + 1,
@@ -356,6 +419,142 @@ class GameRepository(private val db: FirebaseFirestore) {
     suspend fun setGentleMode(userId: String, enabled: Boolean) {
         ensureSeeded(userId)
         updateProfileFields(userId, mapOf("gentleMode" to enabled))
+    }
+
+    suspend fun recordMissionOutcome(
+        userId: String,
+        mission: CommunityMission,
+        victory: Boolean,
+        calmedSpirit: Boolean,
+        remainingMana: Int,
+        usedLootInBattle: Map<LootItemType, Int>
+    ): MissionCompletionSummary {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+
+        var updatedLootCsv = currentProfile.lootBagCsv
+        usedLootInBattle.forEach { (item, qty) ->
+            updatedLootCsv = RpgMissionCatalog.consumeLoot(updatedLootCsv, item, qty) ?: updatedLootCsv
+        }
+
+        if (!victory) {
+            val clampedMana = remainingMana.coerceIn(4, currentProfile.maxMana)
+            updateProfileFields(
+                userId = userId,
+                fields = mapOf(
+                    "mana" to clampedMana,
+                    "lootBagCsv" to updatedLootCsv
+                )
+            )
+            return MissionCompletionSummary(
+                mission = mission,
+                victory = false,
+                calmedSpirit = false,
+                expGained = 0,
+                leveledUpTo = null,
+                magicGained = 0,
+                manaGained = 0,
+                nectarGained = 0,
+                moonstonesGained = 0,
+                prosperityGained = 0,
+                lootEarned = emptyList(),
+                gameBeatenJustNow = false
+            )
+        }
+
+        val firstClear = mission.id !in currentProfile.completedMissionIds
+        val opponent = mission.opponent
+        val sootheBonusMagic = if (calmedSpirit) 8 else 0
+        val sootheBonusMana = if (calmedSpirit) 10 else 0
+
+        val expGained = opponent.rewardExp + if (firstClear && !mission.isWildPatrol) 25 else 0
+        val magicGained = opponent.rewardMagic + sootheBonusMagic
+        val manaGained = opponent.rewardMana + sootheBonusMana
+        val nectarGained = opponent.rewardNectar
+        val moonstonesGained = opponent.rewardMoonstones
+        val prosperityGained = when {
+            mission.isWildPatrol -> if (currentProfile.communityProsperity < 100) mission.prosperityReward else 0
+            firstClear -> mission.prosperityReward
+            else -> 0
+        }
+
+        val earnedLoot = mutableListOf(opponent.guaranteedLoot)
+        if (calmedSpirit && opponent.guaranteedLoot != LootItemType.MANA_VIAL) {
+            earnedLoot += LootItemType.MANA_VIAL
+        }
+        updatedLootCsv = RpgMissionCatalog.addLoot(updatedLootCsv, earnedLoot)
+
+        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, expGained)
+        val leveledUpTo = if (newLevel > currentProfile.heroLevel) newLevel else null
+        val newProsperity = (currentProfile.communityProsperity + prosperityGained).coerceAtMost(100)
+        val newMissionsCsv = (currentProfile.completedMissionIds + mission.id).joinToString(",")
+        val newNectar = currentProfile.nectar + nectarGained
+        val gameBeatenNow = mission.isFinalExpedition && !currentProfile.canopyRestored
+        val updatedCanopyRestored = currentProfile.canopyRestored || mission.isFinalExpedition
+
+        val projectedProfile = currentProfile.copy(
+            heroLevel = newLevel,
+            communityProsperity = newProsperity,
+            magicEssence = currentProfile.magicEssence + magicGained
+        )
+        val newMana = (remainingMana + manaGained).coerceIn(0, projectedProfile.maxMana)
+
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "heroLevel" to newLevel,
+                "heroExp" to newExp,
+                "mana" to newMana,
+                "magicEssence" to (currentProfile.magicEssence + magicGained),
+                "communityProsperity" to newProsperity,
+                "completedMissionsCsv" to newMissionsCsv,
+                "lootBagCsv" to updatedLootCsv,
+                "nectar" to newNectar,
+                "moonstones" to (currentProfile.moonstones + moonstonesGained),
+                "canopyRestored" to updatedCanopyRestored
+            )
+        )
+
+        unlockBiomesForNectar(userId, newNectar)
+        syncDiscoveredLore(userId)
+
+        return MissionCompletionSummary(
+            mission = mission,
+            victory = true,
+            calmedSpirit = calmedSpirit,
+            expGained = expGained,
+            leveledUpTo = leveledUpTo,
+            magicGained = magicGained,
+            manaGained = manaGained,
+            nectarGained = nectarGained,
+            moonstonesGained = moonstonesGained,
+            prosperityGained = prosperityGained,
+            lootEarned = earnedLoot,
+            gameBeatenJustNow = gameBeatenNow
+        )
+    }
+
+    suspend fun restAtSanctuary(userId: String): Int {
+        ensureSeeded(userId)
+        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val maxMana = current.maxMana
+        updateProfileFields(userId, mapOf("mana" to maxMana))
+        return maxMana
+    }
+
+    suspend fun brewBattleLoot(userId: String, item: LootItemType, nectarCost: Int = 12): Boolean {
+        ensureSeeded(userId)
+        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        if (current.nectar < nectarCost) return false
+        val updatedLoot = RpgMissionCatalog.addLoot(current.lootBagCsv, listOf(item))
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "nectar" to (current.nectar - nectarCost),
+                "lootBagCsv" to updatedLoot
+            )
+        )
+        return true
     }
 
     suspend fun getCreatureOnce(userId: String, creatureId: String): CreatureProgressEntity? {

@@ -20,8 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.TaskAlt
@@ -54,7 +54,7 @@ import com.example.data.JungleLoreCatalog
 import com.example.model.BiomeNode
 import com.example.model.LoreCategory
 import com.example.model.PuzzleType
-import com.example.ui.FernfableUiState
+import com.example.stateHolder.FernfableUiState
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent

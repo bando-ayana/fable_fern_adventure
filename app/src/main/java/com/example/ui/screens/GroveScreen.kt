@@ -66,14 +66,13 @@ import com.example.data.JungleLoreCatalog
 import com.example.model.BiomeNode
 import com.example.model.PuzzleType
 import com.example.model.StoryChoice
-import com.example.ui.FernfableUiState
+import com.example.stateHolder.FernfableUiState
 import com.example.ui.components.CreaturePortrait
 import com.example.ui.components.HeroAvatar
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
 import com.example.ui.theme.HeartRoseAccent
-import com.example.ui.theme.OrchidCoralAccent
 import com.example.ui.theme.StarlightVioletAccent
 
 @Composable
@@ -90,6 +89,7 @@ fun GroveScreen(
     onCraftOrEquipRelic: (String) -> Unit,
     onLaunchPuzzle: (PuzzleType) -> Unit,
     onOpenPuzzleHub: () -> Unit,
+    onOpenMissions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val profile = uiState.profile
@@ -219,6 +219,8 @@ fun GroveScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
+                                    val accessedCount = uiState.puzzleStats.values.count { it.accessed }
+
                                     Button(
                                         onClick = onOpenPuzzleHub,
                                         modifier = Modifier
@@ -232,7 +234,7 @@ fun GroveScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Puzzles",
+                                            text = "Puzzles ($accessedCount/${PuzzleType.entries.size})",
                                             maxLines = 1
                                         )
                                     }
@@ -333,9 +335,9 @@ fun GroveScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            RpgStatChip("Magic $totalMagic", StarlightVioletAccent, Modifier.weight(1f))
-                            RpgStatChip("Tech $totalTech", DewTealAccent, Modifier.weight(1f))
-                            RpgStatChip("Heart $totalHeart", OrchidCoralAccent, Modifier.weight(1f))
+                            RpgStatChip("Magic ${totalMagic + profile.arcanePowerBonus}", StarlightVioletAccent, Modifier.weight(1f))
+                            RpgStatChip("Mana ${profile.mana}/${profile.maxMana}", DewTealAccent, Modifier.weight(1f))
+                            RpgStatChip("Town ${profile.communityProsperity}%", FernEmeraldAccent, Modifier.weight(1f))
                         }
 
                         Row(
@@ -370,6 +372,21 @@ fun GroveScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Magitech Gear")
                             }
+                        }
+
+                        Button(
+                            onClick = onOpenMissions,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("grove_open_missions_button")
+                        ) {
+                            Text(
+                                text = if (profile.canopyRestored) {
+                                    "Community Missions & Wild Patrols (Crown Restored!)"
+                                } else {
+                                    "Go on Community Missions & Wild Battles (${profile.communityProsperity}%)"
+                                }
+                            )
                         }
 
                         Row(

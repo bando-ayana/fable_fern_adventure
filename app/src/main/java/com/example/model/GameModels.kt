@@ -19,7 +19,8 @@ enum class PuzzleType(
     val tagline: String,
     val howToPlay: String,
     val skill: BrainSkill,
-    val baseNectarReward: Int
+    val baseNectarReward: Int,
+    val discoveryHint: String
 ) {
     FIREFLY_ECHO(
         id = "firefly_echo",
@@ -27,7 +28,8 @@ enum class PuzzleType(
         tagline = "Follow the glowing lantern blossoms",
         howToPlay = "Watch the enchanted blossoms glow in sequence, then tap them back in the exact same order. Use Replay Whisper anytime in Cozy Assist.",
         skill = BrainSkill.MEMORY,
-        baseNectarReward = 18
+        baseNectarReward = 18,
+        discoveryHint = "Access in Ch. 1: Whispering Moss Hollow or Sky-Bell Weather Mission"
     ),
     MUSHROOM_MELODY(
         id = "mushroom_melody",
@@ -35,7 +37,8 @@ enum class PuzzleType(
         tagline = "Arrange glowing mushrooms by fairy clues",
         howToPlay = "Tap any two glowing mushrooms on the mossy log to swap their spots until every fairy logic clue turns bright green!",
         skill = BrainSkill.LOGIC,
-        baseNectarReward = 20
+        baseNectarReward = 20,
+        discoveryHint = "Access in Ch. 1 (Moss Hollow), Ch. 4 (Crystal Cavern), or Aurora Peak Trial"
     ),
     FERN_MOSAIC(
         id = "fern_mosaic",
@@ -43,7 +46,8 @@ enum class PuzzleType(
         tagline = "Complete the woven jungle leaf pattern",
         howToPlay = "Study the repeating shapes, colors, and tilts along the leafy branch, then pick the botanical tile that completes the missing spot!",
         skill = BrainSkill.DEDUCTION,
-        baseNectarReward = 20
+        baseNectarReward = 20,
+        discoveryHint = "Access in Ch. 2 (Dew Lagoon), Ch. 5 (Starbloom), or Moonflower Orchard Mission"
     ),
     CANOPY_SPOTTER(
         id = "canopy_spotter",
@@ -51,7 +55,8 @@ enum class PuzzleType(
         tagline = "Find twin charms or the playful odd one out",
         howToPlay = "Look closely at the petals, spots, and colors of each jungle charm. Tap the two identical twins—or the single unique charm!",
         skill = BrainSkill.OBSERVATION,
-        baseNectarReward = 19
+        baseNectarReward = 19,
+        discoveryHint = "Access in Wild Patrol: Briar Crossing or Ch. 3: Lantern Orchid Canopy"
     ),
     GROVE_GRID(
         id = "grove_grid",
@@ -59,7 +64,8 @@ enum class PuzzleType(
         tagline = "Balance runes across every mossy grove",
         howToPlay = "Place Sun, Moon, Fern, and Dewdrop runes so each row, column, and 2x2 grove holds all four symbols without repeating.",
         skill = BrainSkill.LOGIC,
-        baseNectarReward = 24
+        baseNectarReward = 24,
+        discoveryHint = "Access in Bless the Sunlight Mirror Glade Mission or Ch. 3 (Orchid Canopy)"
     ),
     VINE_WEAVER(
         id = "vine_weaver",
@@ -67,7 +73,8 @@ enum class PuzzleType(
         tagline = "Guide starlight water to the Moonflower",
         howToPlay = "Tap mossy stream tiles to rotate them until glowing water flows smoothly from the Spring Source to the sleeping Moonflower.",
         skill = BrainSkill.SPATIAL,
-        baseNectarReward = 22
+        baseNectarReward = 22,
+        discoveryHint = "Access in Rebuild the Lower Sun-Bridges Mission or Ch. 2 (Dew Lagoon)"
     ),
     SPIRIT_LOCK(
         id = "spirit_lock",
@@ -75,7 +82,8 @@ enum class PuzzleType(
         tagline = "Crack the ancient treehouse rune lock",
         howToPlay = "Choose a rune sequence and test it! Gold pips mean right rune & spot; Silver pips mean right rune in another spot.",
         skill = BrainSkill.DEDUCTION,
-        baseNectarReward = 25
+        baseNectarReward = 25,
+        discoveryHint = "Access in Clear the Sunken Aqueducts Mission or Ch. 6: Heartwood Shrine"
     );
 
     companion object {
@@ -198,3 +206,96 @@ data class LoreEntry(
     val starterUnlocked: Boolean = false
 )
 
+enum class LootItemType(
+    val id: String,
+    val displayName: String,
+    val description: String,
+    val shortEffect: String
+) {
+    SUNBERRY_TONIC(
+        id = "sunberry_tonic",
+        displayName = "Sunberry Tonic",
+        description = "Warm amber nectar brew pressed by Solari botanists.",
+        shortEffect = "+38 HP in battle"
+    ),
+    MANA_VIAL(
+        id = "mana_vial",
+        displayName = "Starlight Mana Vial",
+        description = "Crystallized canopy dew charged with lunar resonance.",
+        shortEffect = "+32 Mana in battle"
+    ),
+    SUNFIRE_CHARM(
+        id = "sunfire_charm",
+        displayName = "Sunfire Relic Charm",
+        description = "Single-use solar prism that unleashes a radiant burst.",
+        shortEffect = "34 radiant DMG"
+    ),
+    CANOPY_CREST(
+        id = "canopy_crest",
+        displayName = "Living Canopy Crest",
+        description = "Sacred seal earned from wild guardians to awaken the Final Crown.",
+        shortEffect = "Key Trophy Loot"
+    );
+
+    companion object {
+        fun fromId(id: String): LootItemType? = entries.firstOrNull { it.id == id }
+    }
+}
+
+enum class WildCreatureTemperament(val label: String) {
+    MENACING("Menacing Wild Beast"),
+    BEAUTIFUL("Beautiful Mythic Spirit")
+}
+
+data class WildEncounterOpponent(
+    val id: String,
+    val name: String,
+    val title: String,
+    val temperament: WildCreatureTemperament,
+    val habitat: String,
+    val description: String,
+    val maxHp: Int,
+    val minAttack: Int,
+    val maxAttack: Int,
+    val specialMoveName: String,
+    val rewardExp: Int,
+    val rewardMagic: Int,
+    val rewardMana: Int,
+    val rewardNectar: Int,
+    val rewardMoonstones: Int,
+    val guaranteedLoot: LootItemType
+)
+
+data class CommunityMission(
+    val id: String,
+    val orderIndex: Int,
+    val title: String,
+    val communityProject: String,
+    val communityBenefit: String,
+    val summary: String,
+    val communityActionLabel: String,
+    val communityActionOutcome: String,
+    val recommendedLevel: Int,
+    val prosperityReward: Int,
+    val requiredProsperity: Int,
+    val opponent: WildEncounterOpponent,
+    val puzzleChallenge: PuzzleType? = null,
+    val alwaysTriggersBattle: Boolean = true,
+    val isFinalExpedition: Boolean = false,
+    val isWildPatrol: Boolean = false
+)
+
+data class MissionCompletionSummary(
+    val mission: CommunityMission,
+    val victory: Boolean,
+    val calmedSpirit: Boolean,
+    val expGained: Int,
+    val leveledUpTo: Int?,
+    val magicGained: Int,
+    val manaGained: Int,
+    val nectarGained: Int,
+    val moonstonesGained: Int,
+    val prosperityGained: Int,
+    val lootEarned: List<LootItemType>,
+    val gameBeatenJustNow: Boolean
+)
