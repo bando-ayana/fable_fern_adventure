@@ -56,7 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.puzzle.FireflyEchoEngine
-import com.example.ui.FireflyEchoUiState
+import com.example.stateHolder.FireflyEchoUiState
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
