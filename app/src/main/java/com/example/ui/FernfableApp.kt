@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,14 +28,20 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -46,16 +53,34 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.R
+import com.example.audio.AudioScene
+import com.example.audio.FernfableAudioManager
 import com.example.model.PuzzleType
-import com.example.navigation.FernfableRoutes
-import com.example.navigation.TopDestination
 import com.example.stateHolder.FernfableUiState
 import com.example.ui.screens.BestiaryScreen
 import com.example.ui.screens.BrainSkillsScreen
 import com.example.ui.screens.GroveScreen
+import com.example.ui.screens.MissionBattleSheet
 import com.example.ui.screens.MissionsScreen
 import com.example.ui.screens.PuzzleHubScreen
 import com.example.ui.screens.PuzzlePlayScreen
+
+object FernfableRoutes {
+    const val GROVE = "grove"
+    const val MISSIONS = "missions"
+    const val PUZZLES = "puzzles"
+    const val BESTIARY = "bestiary"
+    const val SKILLS = "skills"
+    const val PLAY_PUZZLE = "play_puzzle"
+}
+
+private data class TopDestination(
+    val route: String,
+    @param:StringRes val labelRes: Int,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector,
+    val testTag: String
+)
 
 private val topDestinations = listOf(
     TopDestination(
@@ -64,6 +89,13 @@ private val topDestinations = listOf(
         selectedIcon = Icons.Rounded.Explore,
         unselectedIcon = Icons.Outlined.Explore,
         testTag = "nav_grove"
+    ),
+    TopDestination(
+        route = FernfableRoutes.MISSIONS,
+        labelRes = R.string.nav_missions,
+        selectedIcon = Icons.Rounded.Flag,
+        unselectedIcon = Icons.Outlined.Flag,
+        testTag = "nav_missions"
     ),
     TopDestination(
         route = FernfableRoutes.PUZZLES,
@@ -78,13 +110,6 @@ private val topDestinations = listOf(
         selectedIcon = Icons.Rounded.AutoStories,
         unselectedIcon = Icons.Outlined.AutoStories,
         testTag = "nav_bestiary"
-    ),
-    TopDestination(
-        route = FernfableRoutes.MISSIONS,
-        labelRes = R.string.nav_missions,
-        selectedIcon = Icons.Rounded.Flag,
-        unselectedIcon = Icons.Outlined.Flag,
-        testTag = "nav_missions"
     ),
     TopDestination(
         route = FernfableRoutes.SKILLS,
@@ -103,11 +128,38 @@ fun FernfableApp(
 ) {
     val navController = rememberNavController()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val audioManager = remember(context.applicationContext) {
+        FernfableAudioManager(context.applicationContext)
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isPlayingPuzzle = currentRoute == FernfableRoutes.PLAY_PUZZLE
 
+    DisposableEffect(lifecycleOwner, audioManager) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> audioManager.onForegroundChanged(true)
+                Lifecycle.Event.ON_PAUSE -> audioManager.onForegroundChanged(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            audioManager.release()
+        }
+    }
+
+    LaunchedEffect(isPlayingPuzzle) {
+        audioManager.setScene(
+            if (isPlayingPuzzle) AudioScene.PUZZLE_AMBIENT else AudioScene.RPG_MUSIC
+        )
+    }
 
     LaunchedEffect(uiState.snackbarMessage) {
         val msg = uiState.snackbarMessage
@@ -132,7 +184,7 @@ fun FernfableApp(
         levelOverride: Int? = null,
         accessedFromRpg: Boolean = true
     ) {
-        viewModel.startPuzzle(type, levelOverride, accessedFromRpg)
+        viewModel.startPuzzle(type, levelOverride, accessedFromRpg = accessedFromRpg)
         navController.navigate(FernfableRoutes.PLAY_PUZZLE) {
             launchSingleTop = true
         }
@@ -183,6 +235,12 @@ fun JungleAtmosphereBackground(
     val completionResult by viewModel.completionResult.collectAsStateWithLifecycle()
     val activeBattle by viewModel.activeBattle.collectAsStateWithLifecycle()
     val missionSummary by viewModel.missionSummary.collectAsStateWithLifecycle()
+    val worldState by viewModel.worldState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val audioManager = remember(context.applicationContext) {
+        FernfableAudioManager(context.applicationContext)
+    }
+    val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val useRail = screenWidthDp >= 600
 
@@ -255,9 +313,13 @@ fun JungleAtmosphereBackground(
                 composable(FernfableRoutes.GROVE) {
                     GroveScreen(
                         uiState = uiState,
+                        worldState = worldState,
+                        hasActiveBattle = activeBattle != null,
                         activeEncounter = activeEncounter,
                         encounterFeedback = encounterFeedback,
                         userEmail = userEmail,
+                        isAudioMuted = isAudioMuted,
+                        onToggleAudioMute = audioManager::toggleMute,
                         onSignOut = onSignOut,
                         onOpenBiome = viewModel::openBiomeEncounter,
                         onDismissEncounter = viewModel::dismissEncounter,
@@ -266,7 +328,16 @@ fun JungleAtmosphereBackground(
                         onCraftOrEquipRelic = viewModel::craftOrEquipRelic,
                         onLaunchPuzzle = { puzzleType -> launchPuzzle(puzzleType, null, true) },
                         onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
-                        onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) }
+                        onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) },
+                        onStepWorldFrame = viewModel::stepWorldFrame,
+                        onSetWorldTapTarget = viewModel::setWorldTapTarget,
+                        onShowWorldDialogue = viewModel::showWorldDialogue,
+                        onDismissWorldDialogue = viewModel::dismissWorldDialogue,
+                        onPostWorldToast = viewModel::postWorldToast,
+                        onInteractLantern = viewModel::interactWithWorldLantern,
+                        onForageObject = viewModel::forageWorldObject,
+                        onRestMana = viewModel::restManaAtSanctuary,
+                        onStartWorldMission = viewModel::startMission
                     )
                 }
 
@@ -292,7 +363,9 @@ fun JungleAtmosphereBackground(
                         uiState = uiState,
                         onSelectDifficulty = viewModel::setDifficulty,
                         onToggleGentleMode = viewModel::setGentleMode,
-                        onStartPuzzle = { puzzleType, level -> launchPuzzle(puzzleType, level, true) },
+                        onStartPuzzle = { puzzleType, level ->
+                            launchPuzzle(puzzleType, level, false)
+                        },
                         onNavigateToGrove = { navigateTop(FernfableRoutes.GROVE) },
                         onNavigateToMissions = { navigateTop(FernfableRoutes.MISSIONS) }
                     )
@@ -302,14 +375,18 @@ fun JungleAtmosphereBackground(
                     BestiaryScreen(
                         uiState = uiState,
                         onFeedCreature = viewModel::feedCreature,
-                        onPlaySignaturePuzzle = { type, _, bool -> launchPuzzle(type, null, bool) }
+                        onPlaySignaturePuzzle = { puzzleType, _, _ ->
+                            launchPuzzle(puzzleType, null, true)
+                        }
                     )
                 }
 
                 composable(FernfableRoutes.SKILLS) {
                     BrainSkillsScreen(
                         uiState = uiState,
-                        onTrainSkill = { puzzleType -> launchPuzzle(puzzleType, null, false) },
+                        onTrainSkill = { puzzleType, _, _ ->
+                            launchPuzzle(puzzleType, null, false)
+                        },
                         onExploreRpg = { navigateTop(FernfableRoutes.GROVE) }
                     )
                 }
@@ -320,6 +397,8 @@ fun JungleAtmosphereBackground(
                         level = activePuzzleLevel,
                         difficulty = uiState.selectedDifficulty,
                         gentleMode = uiState.profile.gentleMode,
+                        isAudioMuted = isAudioMuted,
+                        onToggleAudioMute = audioManager::toggleMute,
                         fireflyState = fireflyState,
                         mushroomState = mushroomState,
                         mushroomSelectedSlot = mushroomSelectedSlot,
@@ -365,5 +444,20 @@ fun JungleAtmosphereBackground(
                 }
             }
         }
+    }
+
+    val currentBattle = activeBattle
+    if (currentBattle != null) {
+        MissionBattleSheet(
+            battleState = currentBattle,
+            heroId = uiState.profile.selectedHeroId,
+            missionSummary = missionSummary,
+            onAdvanceCommunityStep = viewModel::advanceMissionCommunityStep,
+            onPerformAction = viewModel::performBattleAction,
+            onUseLoot = viewModel::useBattleLoot,
+            onRetreat = viewModel::retreatFromBattle,
+            onDismiss = viewModel::dismissMissionSheet,
+            onLaunchPuzzle = { puzzleType, _, _ -> launchPuzzle(puzzleType, null, true) }
+        )
     }
 }

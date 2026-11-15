@@ -66,6 +66,7 @@ import com.example.rpg.BattleActionType
 import com.example.rpg.BattlePhase
 import com.example.rpg.RpgBattleEngine
 import com.example.rpg.RpgBattleState
+import com.example.ui.components.BattleArenaStage
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -77,13 +78,14 @@ import com.example.ui.theme.StarlightVioletAccent
 @Composable
 fun MissionBattleSheet(
     battleState: RpgBattleState,
+    heroId: String = "zuri",
     missionSummary: MissionCompletionSummary?,
     onAdvanceCommunityStep: () -> Unit,
     onPerformAction: (BattleActionType) -> Unit,
     onUseLoot: (LootItemType) -> Unit,
     onRetreat: () -> Unit,
     onDismiss: () -> Unit,
-    onLaunchPuzzle: (PuzzleType) -> Unit = {}
+    onLaunchPuzzle: (PuzzleType, Int?, Boolean) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val opponent = battleState.mission.opponent
@@ -189,7 +191,7 @@ fun MissionBattleSheet(
                                 OutlinedButton(
                                     onClick = {
                                         onDismiss()
-                                        onLaunchPuzzle(puzzleChallenge)
+                                        onLaunchPuzzle(puzzleChallenge, null, true)
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -236,6 +238,12 @@ fun MissionBattleSheet(
                         )
 
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            BattleArenaStage(
+                                heroId = heroId,
+                                battleState = battleState,
+                                modifier = Modifier.testTag("battle_visual_arena")
+                            )
+
                             // Wild Creature Arena Card
                             Surface(
                                 shape = RoundedCornerShape(22.dp),
@@ -530,8 +538,7 @@ fun MissionBattleSheet(
                     }
 
                     BattlePhase.VICTORY, BattlePhase.RETREATED -> {
-                        val summary = missionSummary
-                        if (summary == null) {
+                        if (missionSummary == null) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -543,7 +550,7 @@ fun MissionBattleSheet(
                                     style = MaterialTheme.typography.titleMedium
                                 )
                             }
-                        } else if (!summary.victory) {
+                        } else if (!missionSummary.victory) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -574,27 +581,27 @@ fun MissionBattleSheet(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    imageVector = if (summary.gameBeatenJustNow) Icons.Rounded.EmojiEvents else Icons.Rounded.AutoAwesome,
+                                    imageVector = if (missionSummary.gameBeatenJustNow) Icons.Rounded.EmojiEvents else Icons.Rounded.AutoAwesome,
                                     contentDescription = null,
                                     tint = FireflyGoldAccent,
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Text(
                                     text = when {
-                                        summary.gameBeatenJustNow -> "Canopy Crown Awakened · You Beat the Game!"
-                                        summary.calmedSpirit -> "${opponent.name} Harmonized!"
+                                        missionSummary.gameBeatenJustNow -> "Canopy Crown Awakened · You Beat the Game!"
+                                        missionSummary.calmedSpirit -> "${opponent.name} Harmonized!"
                                         else -> "Mission Accomplished!"
                                     },
                                     style = MaterialTheme.typography.headlineSmall,
                                     textAlign = TextAlign.Center
                                 )
-                                if (summary.leveledUpTo != null) {
+                                if (missionSummary.leveledUpTo != null) {
                                     Surface(
                                         shape = RoundedCornerShape(50),
                                         color = FireflyGoldAccent.copy(alpha = 0.22f)
                                     ) {
                                         Text(
-                                            text = "Level Up! Hero reached Lv. ${summary.leveledUpTo}",
+                                            text = "Level Up! Hero reached Lv. ${missionSummary.leveledUpTo}",
                                             style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
@@ -602,8 +609,8 @@ fun MissionBattleSheet(
                                     }
                                 }
                                 Text(
-                                    text = "Community built: ${summary.mission.communityProject}" +
-                                            if (summary.prosperityGained > 0) " (+${summary.prosperityGained}% Prosperity)" else "",
+                                    text = "Community built: ${missionSummary.mission.communityProject}" +
+                                            if (missionSummary.prosperityGained > 0) " (+${missionSummary.prosperityGained}% Prosperity)" else "",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     textAlign = TextAlign.Center
@@ -623,16 +630,16 @@ fun MissionBattleSheet(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "+${summary.expGained} Hero XP · +${summary.magicGained} Arcane Magic · +${summary.manaGained} Mana",
+                                            text = "+${missionSummary.expGained} Hero XP · +${missionSummary.magicGained} Arcane Magic · +${missionSummary.manaGained} Mana",
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         Text(
-                                            text = "+${summary.nectarGained} Sunbeam Nectar · +${summary.moonstonesGained} Moonstone Shards",
+                                            text = "+${missionSummary.nectarGained} Sunbeam Nectar · +${missionSummary.moonstonesGained} Moonstone Shards",
                                             style = MaterialTheme.typography.bodySmall
                                         )
-                                        if (summary.lootEarned.isNotEmpty()) {
+                                        if (missionSummary.lootEarned.isNotEmpty()) {
                                             Text(
-                                                text = "Loot Found: ${summary.lootEarned.joinToString(", ") { it.displayName }}",
+                                                text = "Loot Found: ${missionSummary.lootEarned.joinToString(", ") { it.displayName }}",
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 fontWeight = FontWeight.Bold

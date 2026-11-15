@@ -372,19 +372,6 @@ fun MissionsScreen(
             }
         }
     }
-
-    if (activeBattle != null) {
-        MissionBattleSheet(
-            battleState = activeBattle,
-            missionSummary = missionSummary,
-            onAdvanceCommunityStep = onAdvanceCommunityStep,
-            onPerformAction = onPerformBattleAction,
-            onUseLoot = onUseBattleLoot,
-            onRetreat = onRetreatFromBattle,
-            onDismiss = onDismissMissionSheet,
-            onLaunchPuzzle = onLaunchPuzzle
-        )
-    }
 }
 
 @Composable

@@ -40,7 +40,10 @@ data class FirestoreUserProfile(
     val completedMissionsCsv: String = "",
     val lootBagCsv: String = "sunberry_tonic:2,mana_vial:1",
     val canopyRestored: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null,
+    val dailyStreak: Int = 0,
+    val longestDailyStreak: Int = 0,
+    val lastActivityEpochDay: Long = -1L,
+        @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
     fun toEntity(): PlayerProfileEntity = PlayerProfileEntity(
@@ -69,7 +72,10 @@ data class FirestoreUserProfile(
         communityProsperity = communityProsperity,
         completedMissionsCsv = completedMissionsCsv,
         lootBagCsv = lootBagCsv,
-        canopyRestored = canopyRestored
+        canopyRestored = canopyRestored,
+        dailyStreak = dailyStreak,
+        longestDailyStreak = longestDailyStreak,
+        lastActivityEpochDay = lastActivityEpochDay
     )
 
     companion object {
@@ -109,6 +115,9 @@ data class FirestoreUserProfile(
                 "completedMissionsCsv" to defaults.completedMissionsCsv,
                 "lootBagCsv" to defaults.lootBagCsv,
                 "canopyRestored" to defaults.canopyRestored,
+                "dailyStreak" to defaults.dailyStreak,
+                "longestDailyStreak" to defaults.longestDailyStreak,
+                "lastActivityEpochDay" to defaults.lastActivityEpochDay,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             ).filterValues { it != null } as Map<String, Any>

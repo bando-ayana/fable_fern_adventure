@@ -45,7 +45,7 @@ import com.example.ui.theme.FireflyGoldAccent
 @Composable
 fun BrainSkillsScreen(
     uiState: FernfableUiState,
-    onTrainSkill: (PuzzleType) -> Unit,
+    onTrainSkill: (PuzzleType, Int?, Boolean) -> Unit,
     onExploreRpg: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -190,7 +190,7 @@ fun BrainSkillsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         FilledTonalButton(
                             onClick = {
-                                if (isPuzzleAccessed) onTrainSkill(matchingPuzzle) else onExploreRpg()
+                                if (isPuzzleAccessed) onTrainSkill(matchingPuzzle, null, false) else onExploreRpg()
                             },
                             modifier = Modifier.testTag("train_skill_${skill.name.lowercase()}")
                         ) {

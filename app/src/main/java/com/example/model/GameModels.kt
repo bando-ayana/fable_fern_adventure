@@ -135,7 +135,8 @@ data class StoryChoice(
     val rewardNectar: Int,
     val bondGain: Int,
     val rewardExp: Int = 35,
-    val opensPuzzle: PuzzleType? = null
+    val opensPuzzle: PuzzleType? = null,
+    val startsRpg: Boolean = false
 )
 
 data class BiomeNode(

@@ -17,6 +17,8 @@ import com.example.model.LootItemType
 import com.example.model.MissionCompletionSummary
 import com.example.model.PuzzleCompletionResult
 import com.example.model.PuzzleType
+import com.example.rpg.DailyStreakEvaluation
+import com.example.rpg.DailyStreakTracker
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -140,26 +142,27 @@ class GameRepository(private val db: FirebaseFirestore) {
                 )
             )
             hasWrites = true
-        }else if (!profileSnap.contains("mana") ||
+        } else if (!profileSnap.contains("mana") ||
             !profileSnap.contains("magicEssence") ||
             !profileSnap.contains("communityProsperity") ||
             !profileSnap.contains("completedMissionsCsv") ||
             !profileSnap.contains("lootBagCsv") ||
-            !profileSnap.contains("canopyRestored")
+            !profileSnap.contains("canopyRestored") ||
+            !profileSnap.contains("dailyStreak") ||
+            !profileSnap.contains("longestDailyStreak") ||
+            !profileSnap.contains("lastActivityEpochDay")
         ) {
             val defaults = PlayerProfileEntity()
             val migrationPatch = mutableMapOf<String, Any>()
             if (!profileSnap.contains("mana")) migrationPatch["mana"] = defaults.mana
-            if (!profileSnap.contains("magicEssence")) migrationPatch["magicEssence"] =
-                defaults.magicEssence
-            if (!profileSnap.contains("communityProsperity")) migrationPatch["communityProsperity"] =
-                defaults.communityProsperity
-            if (!profileSnap.contains("completedMissionsCsv")) migrationPatch["completedMissionsCsv"] =
-                defaults.completedMissionsCsv
-            if (!profileSnap.contains("lootBagCsv")) migrationPatch["lootBagCsv"] =
-                defaults.lootBagCsv
-            if (!profileSnap.contains("canopyRestored")) migrationPatch["canopyRestored"] =
-                defaults.canopyRestored
+            if (!profileSnap.contains("magicEssence")) migrationPatch["magicEssence"] = defaults.magicEssence
+            if (!profileSnap.contains("communityProsperity")) migrationPatch["communityProsperity"] = defaults.communityProsperity
+            if (!profileSnap.contains("completedMissionsCsv")) migrationPatch["completedMissionsCsv"] = defaults.completedMissionsCsv
+            if (!profileSnap.contains("lootBagCsv")) migrationPatch["lootBagCsv"] = defaults.lootBagCsv
+            if (!profileSnap.contains("canopyRestored")) migrationPatch["canopyRestored"] = defaults.canopyRestored
+            if (!profileSnap.contains("dailyStreak")) migrationPatch["dailyStreak"] = defaults.dailyStreak
+            if (!profileSnap.contains("longestDailyStreak")) migrationPatch["longestDailyStreak"] = defaults.longestDailyStreak
+            if (!profileSnap.contains("lastActivityEpochDay")) migrationPatch["lastActivityEpochDay"] = defaults.lastActivityEpochDay
             migrationPatch["updatedAt"] = FieldValue.serverTimestamp()
             batch.update(profileRef, migrationPatch)
             hasWrites = true
@@ -280,6 +283,44 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun recordDailyActivity(
+        userId: String,
+        todayEpochDay: Long = DailyStreakTracker.localEpochDay()
+    ): DailyStreakEvaluation {
+        ensureSeeded(userId)
+        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val evaluation = DailyStreakTracker.evaluate(
+            currentStreak = currentProfile.dailyStreak,
+            longestStreak = currentProfile.longestDailyStreak,
+            lastActivityEpochDay = currentProfile.lastActivityEpochDay,
+            todayEpochDay = todayEpochDay
+        )
+        if (!evaluation.didAdvanceStreak) return evaluation
+
+        val (newLevel, newExp) = applyHeroExp(
+            currentProfile.heroLevel,
+            currentProfile.heroExp,
+            evaluation.bonusHeroExp
+        )
+        val projectedMaxMana = currentProfile.copy(heroLevel = newLevel).maxMana
+        val newMana = maxOf(
+            currentProfile.mana,
+            (currentProfile.mana + evaluation.bonusMana).coerceAtMost(projectedMaxMana)
+        )
+        updateProfileFields(
+            userId = userId,
+            fields = mapOf(
+                "dailyStreak" to evaluation.newStreak,
+                "longestDailyStreak" to evaluation.newLongestStreak,
+                "lastActivityEpochDay" to evaluation.newLastActivityEpochDay,
+                "heroLevel" to newLevel,
+                "heroExp" to newExp,
+                "mana" to newMana
+            )
+        )
+        return evaluation
+    }
+
     suspend fun recordPuzzleSolved(
         userId: String,
         puzzleType: PuzzleType,
@@ -296,10 +337,10 @@ class GameRepository(private val db: FirebaseFirestore) {
             ?: PuzzleStatsEntity(puzzleType = puzzleType.id)
 
         val nectarEarned = ((puzzleType.baseNectarReward + levelPlayed * 2) * difficulty.rewardMultiplier).roundToInt() +
-            hero.bonusNectarPerPuzzle + relic.bonusNectar
+                hero.bonusNectarPerPuzzle + relic.bonusNectar
         val moonstonesEarned = if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
         val skillXpEarned = difficulty.xpBonus + starsEarned * 5 + (rawScore / 25).coerceAtMost(20) +
-            hero.bonusSkillXp
+                hero.bonusSkillXp
         val heroExpGain = 35 + starsEarned * 10
         val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, heroExpGain)
         val newStreak = currentProfile.currentStreak + 1
@@ -350,6 +391,9 @@ class GameRepository(private val db: FirebaseFirestore) {
 
         unlockBiomesForNectar(userId, totalNectarAfter)
         syncDiscoveredLore(userId)
+        if (currentProfile.lastActivityEpochDay != DailyStreakTracker.localEpochDay()) {
+            recordDailyActivity(userId)
+        }
 
         return PuzzleCompletionResult(
             puzzleType = puzzleType,
@@ -393,6 +437,9 @@ class GameRepository(private val db: FirebaseFirestore) {
         addCreatureBond(userId, creatureId, bondGain + hero.bonusBondXp)
         unlockBiomesForNectar(userId, newNectar)
         syncDiscoveredLore(userId)
+        if (currentProfile.lastActivityEpochDay != DailyStreakTracker.localEpochDay()) {
+            recordDailyActivity(userId)
+        }
     }
 
     suspend fun feedCreatureTreat(
@@ -517,6 +564,9 @@ class GameRepository(private val db: FirebaseFirestore) {
 
         unlockBiomesForNectar(userId, newNectar)
         syncDiscoveredLore(userId)
+        if (currentProfile.lastActivityEpochDay != DailyStreakTracker.localEpochDay()) {
+            recordDailyActivity(userId)
+        }
 
         return MissionCompletionSummary(
             mission = mission,
@@ -555,6 +605,25 @@ class GameRepository(private val db: FirebaseFirestore) {
             )
         )
         return true
+    }
+
+    suspend fun forageWorldResource(
+        userId: String,
+        nectarGain: Int,
+        lootItem: LootItemType? = null
+    ) {
+        ensureSeeded(userId)
+        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val newNectar = current.nectar + nectarGain.coerceAtLeast(0)
+        val fields = mutableMapOf<String, Any>("nectar" to newNectar)
+        if (lootItem != null) {
+            fields["lootBagCsv"] = RpgMissionCatalog.addLoot(current.lootBagCsv, listOf(lootItem))
+        }
+        updateProfileFields(userId = userId, fields = fields)
+        if (nectarGain > 0) {
+            unlockBiomesForNectar(userId, newNectar)
+            syncDiscoveredLore(userId)
+        }
     }
 
     suspend fun getCreatureOnce(userId: String, creatureId: String): CreatureProgressEntity? {

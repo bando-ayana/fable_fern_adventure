@@ -1,241 +1,209 @@
-const {
-  initializeTestEnvironment,
-  assertFails,
-  assertSucceeds,
-} = require("@firebase/rules-unit-testing");
-const { test, before, after, beforeEach } = require("node:test");
-const fs = require("node:fs");
-const firebaseCompat = require("/usr/local/lib/node_modules/@firebase/rules-unit-testing/node_modules/firebase/compat/app");
-require("/usr/local/lib/node_modules/@firebase/rules-unit-testing/node_modules/firebase/compat/firestore");
-const serverTimestamp = () => firebaseCompat.firestore.FieldValue.serverTimestamp();
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-let testEnv;
-const PROJECT_ID = process.env.GCP_PROJECT || "demo-no-project";
-const ALICE_UID = "alice_123";
-const BOB_UID = "bob_456";
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-const [emulatorHost, emulatorPortStr] = (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8085").split(":");
-const emulatorPort = parseInt(emulatorPortStr, 10);
+    // Hardened global primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
 
-function validProfile(uid) {
-  return {
-    userId: uid,
-    explorerName: "Zuri Vance",
-    displayName: "Alice Explorer",
-    email: "alice@example.com",
-    selectedHeroId: "zuri",
-    heroLevel: 1,
-    heroExp: 0,
-    equippedRelicId: "solar_visor",
-    unlockedRelicsCsv: "solar_visor",
-    completedQuestsCsv: "",
-    discoveredLoreCsv: "solari_spires,moss_hollow_chronicle",
-    nectar: 15,
-    moonstones: 2,
-    memoryXp: 0,
-    logicXp: 0,
-    spatialXp: 0,
-    deductionXp: 0,
-    observationXp: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-    totalPuzzlesSolved: 0,
-    gentleMode: true,
-    mana: 40,
-    magicEssence: 0,
-    communityProsperity: 0,
-    completedMissionsCsv: "",
-    lootBagCsv: "sunberry_tonic:2,mana_vial:1",
-    canopyRestored: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-}
+    function incoming() {
+      return request.resource.data;
+    }
 
-function validCreature(uid, creatureId = "lumafern") {
-  return {
-    userId: uid,
-    creatureId,
-    discovered: true,
-    bondLevel: 1,
-    bondXp: 15,
-    treatsFed: 0,
-    lastInteractionMillis: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-}
+    function existing() {
+      return resource.data;
+    }
 
-function validPuzzleStats(uid, puzzleType = "firefly_echo") {
-  return {
-    userId: uid,
-    puzzleType,
-    accessed: false,
-    currentLevel: 1,
-    totalStars: 0,
-    playedCount: 0,
-    solvedCount: 0,
-    bestScore: 0,
-    bestStreak: 0,
-    lastSolvedMillis: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-}
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-before(async () => {
-  const rules = fs.readFileSync("./firestore.rules", "utf8");
-  testEnv = await initializeTestEnvironment({
-    projectId: PROJECT_ID,
-    firestore: {
-      rules,
-      host: emulatorHost,
-      port: emulatorPort,
-    },
-  });
-});
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
 
-after(async () => {
-  if (testEnv) {
-    await testEnv.cleanup();
+    function isValidUserProfile(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.explorerName is string && data.explorerName.size() >= 1 && data.explorerName.size() <= 80 &&
+             data.selectedHeroId is string && isValidId(data.selectedHeroId) &&
+             data.heroLevel is int && data.heroLevel >= 1 && data.heroLevel <= 999 &&
+             data.heroExp is int && data.heroExp >= 0 && data.heroExp <= 10000000 &&
+             data.equippedRelicId is string && isValidId(data.equippedRelicId) &&
+             data.unlockedRelicsCsv is string && data.unlockedRelicsCsv.size() <= 500 &&
+             data.completedQuestsCsv is string && data.completedQuestsCsv.size() <= 500 &&
+             data.discoveredLoreCsv is string && data.discoveredLoreCsv.size() <= 1000 &&
+             data.nectar is int && data.nectar >= 0 && data.nectar <= 10000000 &&
+             data.moonstones is int && data.moonstones >= 0 && data.moonstones <= 10000000 &&
+             data.memoryXp is int && data.memoryXp >= 0 && data.memoryXp <= 10000000 &&
+             data.logicXp is int && data.logicXp >= 0 && data.logicXp <= 10000000 &&
+             data.spatialXp is int && data.spatialXp >= 0 && data.spatialXp <= 10000000 &&
+             data.deductionXp is int && data.deductionXp >= 0 && data.deductionXp <= 10000000 &&
+             data.observationXp is int && data.observationXp >= 0 && data.observationXp <= 10000000 &&
+             data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 1000000 &&
+             data.totalPuzzlesSolved is int && data.totalPuzzlesSolved >= 0 && data.totalPuzzlesSolved <= 1000000 &&
+             data.gentleMode is bool &&
+             data.mana is int && data.mana >= 0 && data.mana <= 1000000 &&
+             data.magicEssence is int && data.magicEssence >= 0 && data.magicEssence <= 10000000 &&
+             data.communityProsperity is int && data.communityProsperity >= 0 && data.communityProsperity <= 100000 &&
+             data.completedMissionsCsv is string && data.completedMissionsCsv.size() <= 500 &&
+             data.lootBagCsv is string && data.lootBagCsv.size() <= 500 &&
+             data.canopyRestored is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150));
+    }
+
+    function isValidCreatureProgress(data, creatureId) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.creatureId is string && data.creatureId == creatureId && isValidId(data.creatureId) &&
+             data.discovered is bool &&
+             data.bondLevel is int && data.bondLevel >= 0 && data.bondLevel <= 10 &&
+             data.bondXp is int && data.bondXp >= 0 && data.bondXp <= 10000000 &&
+             data.treatsFed is int && data.treatsFed >= 0 && data.treatsFed <= 1000000 &&
+             data.lastInteractionMillis is int && data.lastInteractionMillis >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPuzzleStats(data, puzzleType) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.puzzleType is string && data.puzzleType == puzzleType && isValidId(data.puzzleType) &&
+             data.accessed is bool &&
+             data.currentLevel is int && data.currentLevel >= 1 && data.currentLevel <= 9999 &&
+             data.totalStars is int && data.totalStars >= 0 && data.totalStars <= 10000000 &&
+             data.playedCount is int && data.playedCount >= 0 && data.playedCount <= 10000000 &&
+             data.solvedCount is int && data.solvedCount >= 0 && data.solvedCount <= 10000000 &&
+             data.bestScore is int && data.bestScore >= 0 && data.bestScore <= 10000000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 10000000 &&
+             data.lastSolvedMillis is int && data.lastSolvedMillis >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      // Strictly owner-only access because document contains private profile & optional email PII
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'explorerName', 'selectedHeroId', 'heroLevel', 'heroExp',
+                         'equippedRelicId', 'unlockedRelicsCsv', 'completedQuestsCsv', 'discoveredLoreCsv',
+                         'nectar', 'moonstones', 'memoryXp', 'logicXp', 'spatialXp',
+                         'deductionXp', 'observationXp', 'currentStreak', 'bestStreak',
+                         'totalPuzzlesSolved', 'gentleMode', 'mana', 'magicEssence',
+                         'communityProsperity', 'completedMissionsCsv', 'lootBagCsv', 'canopyRestored',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'explorerName', 'displayName', 'email', 'selectedHeroId',
+                         'heroLevel', 'heroExp', 'equippedRelicId', 'unlockedRelicsCsv',
+                         'completedQuestsCsv', 'discoveredLoreCsv', 'nectar', 'moonstones',
+                         'memoryXp', 'logicXp', 'spatialXp', 'deductionXp', 'observationXp',
+                         'currentStreak', 'bestStreak', 'totalPuzzlesSolved', 'gentleMode',
+                         'mana', 'magicEssence', 'communityProsperity', 'completedMissionsCsv',
+                         'lootBagCsv', 'canopyRestored', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'explorerName', 'displayName', 'email', 'selectedHeroId',
+                         'heroLevel', 'heroExp', 'equippedRelicId', 'unlockedRelicsCsv',
+                         'completedQuestsCsv', 'discoveredLoreCsv', 'nectar', 'moonstones',
+                         'memoryXp', 'logicXp', 'spatialXp', 'deductionXp', 'observationXp',
+                         'currentStreak', 'bestStreak', 'totalPuzzlesSolved', 'gentleMode',
+                         'mana', 'magicEssence', 'communityProsperity', 'completedMissionsCsv',
+                         'lootBagCsv', 'canopyRestored', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /creatures/{creatureId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(creatureId);
+        allow list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(creatureId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'creatureId', 'discovered', 'bondLevel',
+                           'bondXp', 'treatsFed', 'lastInteractionMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'creatureId', 'discovered', 'bondLevel',
+                           'bondXp', 'treatsFed', 'lastInteractionMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCreatureProgress(incoming(), creatureId) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(creatureId) &&
+                         isValidCreatureProgress(incoming(), creatureId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().creatureId == existing().creatureId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'discovered', 'bondLevel', 'bondXp', 'treatsFed',
+                           'lastInteractionMillis', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(creatureId);
+      }
+
+      match /puzzle_stats/{puzzleType} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(puzzleType);
+        allow list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(puzzleType) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'puzzleType', 'accessed', 'currentLevel', 'totalStars',
+                           'playedCount', 'solvedCount', 'bestScore', 'bestStreak',
+                           'lastSolvedMillis', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'puzzleType', 'accessed', 'currentLevel', 'totalStars',
+                           'playedCount', 'solvedCount', 'bestScore', 'bestStreak',
+                           'lastSolvedMillis', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidPuzzleStats(incoming(), puzzleType) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(puzzleType) &&
+                         isValidPuzzleStats(incoming(), puzzleType) &&
+                         incoming().userId == existing().userId &&
+                         incoming().puzzleType == existing().puzzleType &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'accessed', 'currentLevel', 'totalStars', 'playedCount', 'solvedCount',
+                           'bestScore', 'bestStreak', 'lastSolvedMillis', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(puzzleType);
+      }
+    }
   }
-});
-
-beforeEach(async () => {
-  if (testEnv) {
-    await testEnv.clearFirestore();
-  }
-});
-
-test("Unauthenticated user cannot read or write profiles, creatures, or puzzle stats", async () => {
-  const unauthDb = testEnv.unauthenticatedContext().firestore();
-  await assertFails(unauthDb.collection("users").doc(ALICE_UID).get());
-  await assertFails(unauthDb.collection("users").get());
-  await assertFails(unauthDb.collection("users").doc(ALICE_UID).set(validProfile(ALICE_UID)));
-  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("creatures").get());
-  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("puzzle_stats").get());
-});
-
-test("Authenticated user can create, read, and update their own profile and subcollections in a batch", async () => {
-  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
-  const batch = aliceDb.batch();
-  const profileRef = aliceDb.collection("users").doc(ALICE_UID);
-  const creatureRef = profileRef.collection("creatures").doc("lumafern");
-  const statsRef = profileRef.collection("puzzle_stats").doc("firefly_echo");
-
-  batch.set(profileRef, validProfile(ALICE_UID));
-  batch.set(creatureRef, validCreature(ALICE_UID, "lumafern"));
-  batch.set(statsRef, validPuzzleStats(ALICE_UID, "firefly_echo"));
-  await assertSucceeds(batch.commit());
-
-  await assertSucceeds(profileRef.get());
-  await assertSucceeds(profileRef.collection("creatures").get());
-  await assertSucceeds(profileRef.collection("puzzle_stats").get());
-
-  await assertSucceeds(
-    profileRef.update({
-      nectar: 35,
-      heroExp: 45,
-      mana: 32,
-      magicEssence: 18,
-      communityProsperity: 20,
-      completedMissionsCsv: "mission_sunbridge",
-      lootBagCsv: "sunberry_tonic:2,mana_vial:1",
-      canopyRestored: false,
-      updatedAt: serverTimestamp(),
-    })
-  );
-
-  await assertSucceeds(
-    creatureRef.update({
-      bondXp: 45,
-      treatsFed: 1,
-      updatedAt: serverTimestamp(),
-    })
-  );
-
-  await assertSucceeds(
-    statsRef.update({
-      accessed: true,
-      currentLevel: 2,
-      totalStars: 3,
-      playedCount: 1,
-      solvedCount: 1,
-      bestScore: 150,
-      updatedAt: serverTimestamp(),
-    })
-  );
-});
-
-test("Cross-user isolation: Bob cannot read, list, create, update, or delete Alice's data", async () => {
-  await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    const db = ctx.firestore();
-    await db.collection("users").doc(ALICE_UID).set(validProfile(ALICE_UID));
-    await db.collection("users").doc(ALICE_UID).collection("creatures").doc("lumafern").set(validCreature(ALICE_UID));
-    await db.collection("users").doc(ALICE_UID).collection("puzzle_stats").doc("firefly_echo").set(validPuzzleStats(ALICE_UID));
-  });
-
-  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
-  await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
-  await assertFails(bobDb.collection("users").get());
-  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("creatures").get());
-  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("puzzle_stats").get());
-  await assertFails(bobDb.collection("users").doc(ALICE_UID).update({ nectar: 999, updatedAt: serverTimestamp() }));
-  await assertFails(bobDb.collection("users").doc(ALICE_UID).delete());
-});
-
-test("Schema & identity hardening: rejects ghost fields, negative counters, mismatched IDs, and orphan subcollections", async () => {
-  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
-  const profileRef = aliceDb.collection("users").doc(ALICE_UID);
-
-  // Orphan creature without parent profile
-  await assertFails(
-    profileRef.collection("creatures").doc("lumafern").set(validCreature(ALICE_UID, "lumafern"))
-  );
-
-  // Shadow/ghost field on create
-  await assertFails(
-    profileRef.set({ ...validProfile(ALICE_UID), isAdmin: true })
-  );
-
-  // Spoofed userId field
-  await assertFails(
-    profileRef.set({ ...validProfile(ALICE_UID), userId: BOB_UID })
-  );
-
-  // Create valid profile first
-  await assertSucceeds(profileRef.set(validProfile(ALICE_UID)));
-
-  // Mismatched creatureId path vs document body
-  await assertFails(
-    profileRef.collection("creatures").doc("lumafern").set(validCreature(ALICE_UID, "dewdrake"))
-  );
-
-  // Value poisoning: negative nectar or negative mana
-  await assertFails(
-    profileRef.update({ nectar: -10, updatedAt: serverTimestamp() })
-  );
-  await assertFails(
-    profileRef.update({ mana: -5, updatedAt: serverTimestamp() })
-  );
-
-  // Ghost field on update
-  await assertFails(
-    profileRef.update({ ghostFlag: true, updatedAt: serverTimestamp() })
-  );
-
-  // Attempting to mutate immutable createdAt
-  await assertFails(
-    profileRef.update({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
-  );
-
-  // Puzzle stats requires boolean accessed
-  const statsRef = profileRef.collection("puzzle_stats").doc("firefly_echo");
-  await assertFails(
-    statsRef.set({ ...validPuzzleStats(ALICE_UID, "firefly_echo"), accessed: "yes" })
-  );
-  await assertSucceeds(statsRef.set(validPuzzleStats(ALICE_UID, "firefly_echo")));
-  await assertFails(
-    statsRef.update({ accessed: 1, updatedAt: serverTimestamp() })
-  );
-});
+}

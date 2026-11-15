@@ -32,8 +32,12 @@ import com.example.puzzle.VineWeaverBoard
 import com.example.puzzle.VineWeaverEngine
 import com.example.rpg.BattleActionType
 import com.example.rpg.BattlePhase
+import com.example.rpg.InteractableKind
 import com.example.rpg.RpgBattleEngine
 import com.example.rpg.RpgBattleState
+import com.example.rpg.RpgWorldEngine
+import com.example.rpg.RpgWorldState
+import com.example.rpg.WorldToast
 import com.example.stateHolder.FernfableUiState
 import com.example.stateHolder.FireflyEchoUiState
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -48,6 +52,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class FernfableViewModel(
     private val repository: GameRepository,
@@ -147,18 +152,24 @@ class FernfableViewModel(
     private val _missionSummary = MutableStateFlow<MissionCompletionSummary?>(null)
     val missionSummary: StateFlow<MissionCompletionSummary?> = _missionSummary.asStateFlow()
 
+    private val _worldState = MutableStateFlow(RpgWorldState())
+    val worldState: StateFlow<RpgWorldState> = _worldState.asStateFlow()
+
     private var playbackJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch {
             try {
                 repository.ensureSeeded(currentUserId, userDisplayName, userEmail)
+                val streakEval = repository.recordDailyActivity(currentUserId)
+                if (streakEval.didAdvanceStreak && streakEval.rewardMessage != null) {
+                    _snackbarMessage.value = streakEval.rewardMessage
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Initial sanctuary seed failed", e)
-                _snackbarMessage.value =
-                    e.localizedMessage ?: "Couldn't initialize cloud sanctuary."
+                _snackbarMessage.value = e.localizedMessage ?: "Couldn't initialize cloud sanctuary."
             }
         }
     }
@@ -188,8 +199,7 @@ class FernfableViewModel(
                     _snackbarMessage.value = "Now adventuring as ${hero.name} (${hero.title})!"
                 }
             } else {
-                _snackbarMessage.value =
-                    "Gather ${hero.unlockNectar} Sunbeam Nectar to welcome ${hero.name}!"
+                _snackbarMessage.value = "Gather ${hero.unlockNectar} Sunbeam Nectar to welcome ${hero.name}!"
             }
         }
     }
@@ -343,7 +353,7 @@ class FernfableViewModel(
                     statusBanner = "Round ${round.roundNumber} of ${round.totalRounds} — Watch closely!"
                 )
             }
-            delay(450L)
+            delay(450L.milliseconds)
             val pulseMs = when (_selectedDifficulty.value) {
                 DifficultyTier.SPROUT -> 460L
                 DifficultyTier.EXPLORER -> 380L
@@ -351,9 +361,9 @@ class FernfableViewModel(
             }
             for (blossomIdx in round.sequence) {
                 _fireflyState.update { it.copy(activeBlossomIdx = blossomIdx) }
-                delay(pulseMs)
+                delay(pulseMs.milliseconds)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
-                delay(180L)
+                delay(180L.milliseconds)
             }
             _fireflyState.update {
                 it.copy(
@@ -380,7 +390,7 @@ class FernfableViewModel(
             val nextInput = state.userInput + index
             viewModelScope.launch {
                 _fireflyState.update { it.copy(activeBlossomIdx = index) }
-                delay(160L)
+                delay(160L.milliseconds)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
             }
 
@@ -412,7 +422,7 @@ class FernfableViewModel(
                         )
                     }
                     viewModelScope.launch {
-                        delay(550L)
+                        delay(550L.milliseconds)
                         playFireflySequence()
                     }
                 }
@@ -440,7 +450,7 @@ class FernfableViewModel(
                         }
                     )
                 }
-                delay(550L)
+                delay(550L.milliseconds)
                 _fireflyState.update { it.copy(errorFlashIdx = null) }
                 playFireflySequence()
             }
@@ -610,8 +620,7 @@ class FernfableViewModel(
         _groveGridState.value = updated
 
         if (GroveGridEngine.isSolved(newBoard)) {
-            val score =
-                GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
+            val score = GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
             val stars = when {
                 gridHints == 0 -> 3
                 gridHints <= 2 -> 2
@@ -633,14 +642,12 @@ class FernfableViewModel(
             ?: return
 
         gridHints++
-        val newBoard =
-            puzzle.board.toMutableList().apply { this[targetCell] = puzzle.solution[targetCell] }
+        val newBoard = puzzle.board.toMutableList().apply { this[targetCell] = puzzle.solution[targetCell] }
         _groveGridState.value = puzzle.copy(board = newBoard)
         _selectedGridCell.value = newBoard.indexOfFirst { it == 0 }.takeIf { it >= 0 }
 
         if (GroveGridEngine.isSolved(newBoard)) {
-            val score =
-                GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
+            val score = GroveGridEngine.computeScore(_selectedDifficulty.value, gridMoves, gridHints)
             val stars = when {
                 gridHints == 0 -> 3
                 gridHints <= 2 -> 2
@@ -661,8 +668,7 @@ class FernfableViewModel(
         _vineWeaverState.value = updated
 
         if (updated.moonflowerBloomed) {
-            val score =
-                VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
+            val score = VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
             val stars = when {
                 vineHints == 0 -> 3
                 vineHints <= 2 -> 2
@@ -681,8 +687,7 @@ class FernfableViewModel(
         _vineWeaverState.value = updated
 
         if (updated.moonflowerBloomed) {
-            val score =
-                VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
+            val score = VineWeaverEngine.computeScore(_selectedDifficulty.value, vineTaps, vineHints)
             val stars = when {
                 vineHints == 0 -> 3
                 vineHints <= 2 -> 2
@@ -758,21 +763,130 @@ class FernfableViewModel(
         }
     }
 
+    // --- RPG World Overworld Simulation & Interactions ---
+
+    fun stepWorldFrame(joyX: Float, joyY: Float, deltaSec: Float) {
+        if (_activeBattle.value != null || _activeEncounter.value != null) return
+        val profile = uiState.value.profile
+        val (nextState, engagedCreature) = RpgWorldEngine.stepWorld(
+            state = _worldState.value,
+            joyX = joyX,
+            joyY = joyY,
+            deltaSec = deltaSec,
+            communityProsperity = profile.communityProsperity,
+            completedMissions = profile.completedMissionIds
+        )
+        _worldState.value = nextState
+        if (engagedCreature != null) {
+            val mission = engagedCreature.missionId?.let { RpgMissionCatalog.missionById(it) }
+            if (mission != null) {
+                startMission(mission, skipPrepToCombat = true)
+            }
+        }
+    }
+
+    fun setWorldTapTarget(x: Float, y: Float) {
+        val clampedX = x.coerceIn(0.6f, RpgWorldEngine.MAP_WIDTH - 0.6f)
+        val clampedY = y.coerceIn(0.6f, RpgWorldEngine.MAP_HEIGHT - 0.6f)
+        _worldState.update {
+            it.copy(
+                tapTarget = clampedX to clampedY,
+                dialogueSpeaker = null,
+                dialogueBody = null
+            )
+        }
+    }
+
+    fun showWorldDialogue(speaker: String, body: String) {
+        _worldState.update {
+            it.copy(
+                tapTarget = null,
+                dialogueSpeaker = speaker,
+                dialogueBody = body
+            )
+        }
+    }
+
+    fun dismissWorldDialogue() {
+        _worldState.update { it.copy(dialogueSpeaker = null, dialogueBody = null) }
+    }
+
+    fun postWorldToast(text: String) {
+        _worldState.update { cur ->
+            val seq = cur.toastSeq + 1
+            cur.copy(
+                toastSeq = seq,
+                worldToast = WorldToast(id = seq, text = text, x = cur.heroX, y = cur.heroY)
+            )
+        }
+    }
+
+    fun interactWithWorldLantern(lanternId: String, title: String) {
+        val alreadyLit = lanternId in _worldState.value.litLanternIds
+        _worldState.update { it.copy(litLanternIds = it.litLanternIds + lanternId) }
+        if (!alreadyLit) {
+            postWorldToast("$title lit! +2 Sunbeam Nectar")
+            viewModelScope.launch {
+                runRepositoryAction {
+                    repository.forageWorldResource(currentUserId, nectarGain = 2)
+                }
+            }
+        } else {
+            postWorldToast("$title hums softly with golden light.")
+        }
+    }
+
+    fun forageWorldObject(objectId: String, kind: InteractableKind, title: String) {
+        if (objectId in _worldState.value.harvestedIds) {
+            postWorldToast("$title has already been harvested today.")
+            return
+        }
+        _worldState.update { it.copy(harvestedIds = it.harvestedIds + objectId) }
+        when (kind) {
+            InteractableKind.HARVEST_TONIC -> {
+                postWorldToast("Foraged 1 Sunberry Tonic & +3 Nectar!")
+                viewModelScope.launch {
+                    runRepositoryAction {
+                        repository.forageWorldResource(
+                            userId = currentUserId,
+                            nectarGain = 3,
+                            lootItem = LootItemType.SUNBERRY_TONIC
+                        )
+                    }
+                }
+            }
+            else -> {
+                postWorldToast("Harvested +5 Sunbeam Nectar from $title!")
+                viewModelScope.launch {
+                    runRepositoryAction {
+                        repository.forageWorldResource(userId = currentUserId, nectarGain = 5)
+                    }
+                }
+            }
+        }
+    }
+
     // --- RPG Community Missions & Wild Creature Battles ---
 
-    fun startMission(mission: CommunityMission) {
+    fun startMission(mission: CommunityMission, skipPrepToCombat: Boolean = false) {
         val profile = uiState.value.profile
         if (!mission.isWildPatrol && profile.communityProsperity < mission.requiredProsperity) {
             _snackbarMessage.value = "Build ${mission.requiredProsperity}% Community Prosperity first!"
+            postWorldToast("Need ${mission.requiredProsperity}% Prosperity to face ${mission.opponent.name}")
             return
         }
         val loot = RpgMissionCatalog.parseLootBag(profile.lootBagCsv)
         _missionSummary.value = null
-        _activeBattle.value = RpgBattleEngine.createBattleState(
+        val initial = RpgBattleEngine.createBattleState(
             mission = mission,
             profile = profile,
             lootAvailable = loot
         )
+        _activeBattle.value = if (skipPrepToCombat) {
+            RpgBattleEngine.beginWildEncounter(initial)
+        } else {
+            initial
+        }
     }
 
     fun advanceMissionCommunityStep() {
@@ -803,6 +917,7 @@ class FernfableViewModel(
 
     fun retreatFromBattle() {
         val current = _activeBattle.value ?: return
+        _worldState.update { RpgWorldEngine.applyBattleCooldownAll(it) }
         if (current.phase == BattlePhase.COMMUNITY_PREP) {
             _activeBattle.value = null
             return
@@ -818,6 +933,7 @@ class FernfableViewModel(
     fun dismissMissionSheet() {
         _activeBattle.value = null
         _missionSummary.value = null
+        _worldState.update { RpgWorldEngine.applyBattleCooldownAll(it) }
     }
 
     fun restManaAtSanctuary() {
@@ -825,6 +941,7 @@ class FernfableViewModel(
             runRepositoryAction {
                 val maxMana = repository.restAtSanctuary(currentUserId)
                 _snackbarMessage.value = "Mana restored to $maxMana/$maxMana at the Sanctuary!"
+                postWorldToast("Mana restored to $maxMana/$maxMana!")
             }
         }
     }
@@ -884,4 +1001,3 @@ class FernfableViewModel(
         }
     }
 }
-

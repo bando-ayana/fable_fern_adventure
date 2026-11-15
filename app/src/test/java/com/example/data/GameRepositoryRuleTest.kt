@@ -151,8 +151,42 @@ class GameRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertEquals(20, postQuestProfile?.communityProsperity)
         assertEquals(maxMana, postQuestProfile?.mana)
         assertTrue((postQuestProfile?.magicEssence ?: 0) > 0)
-        val parsedLoot = RpgMissionCatalog.parseLootBag(postQuestProfile?.lootBagCsv.orEmpty())
+        val parsedLootBeforeForage = RpgMissionCatalog.parseLootBag(postQuestProfile?.lootBagCsv.orEmpty())
+        val tonicsBefore = parsedLootBeforeForage[LootItemType.SUNBERRY_TONIC] ?: 0
+        val nectarBeforeForage = postQuestProfile?.nectar ?: 0
+
+        withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
+            repository.forageWorldResource(aliceUid, nectarGain = 5, lootItem = LootItemType.SUNBERRY_TONIC)
+        }
+        val postForageProfile = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) { repository.getProfileOnce(aliceUid) }
+        assertEquals(nectarBeforeForage + 5, postForageProfile?.nectar)
+        val parsedLoot = RpgMissionCatalog.parseLootBag(postForageProfile?.lootBagCsv.orEmpty())
         assertTrue((parsedLoot[LootItemType.SUNFIRE_CHARM] ?: 0) >= 1)
+        assertEquals(tonicsBefore + 1, parsedLoot[LootItemType.SUNBERRY_TONIC] ?: 0)
+
+        val day1 = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
+            repository.recordDailyActivity(aliceUid, todayEpochDay = 20_400L)
+        }
+        assertTrue(day1.didAdvanceStreak)
+        assertEquals(1, day1.newStreak)
+
+        val repeatSameDay = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
+            repository.recordDailyActivity(aliceUid, todayEpochDay = 20_400L)
+        }
+        assertFalse(repeatSameDay.didAdvanceStreak)
+
+        val day2 = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
+            repository.recordDailyActivity(aliceUid, todayEpochDay = 20_401L)
+        }
+        assertTrue(day2.didAdvanceStreak)
+        assertEquals(2, day2.newStreak)
+        assertEquals(35, day2.bonusHeroExp)
+        assertEquals(14, day2.bonusMana)
+
+        val streakProfile = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) { repository.getProfileOnce(aliceUid) }
+        assertEquals(2, streakProfile?.dailyStreak)
+        assertEquals(2, streakProfile?.longestDailyStreak)
+        assertEquals(20_401L, streakProfile?.lastActivityEpochDay)
     }
 
     @Test

@@ -245,7 +245,8 @@ object JungleLoreCatalog {
                     responseText = "Lumafern's ears perk up joyfully! Warm golden sparks dance around your magitech staff, granting +35 Hero EXP.",
                     rewardNectar = 12,
                     bondGain = 20,
-                    rewardExp = 35
+                    rewardExp = 35,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "luma_puzzle",
@@ -254,6 +255,7 @@ object JungleLoreCatalog {
                     rewardNectar = 8,
                     bondGain = 15,
                     rewardExp = 40,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.FIREFLY_ECHO
                 ),
                 StoryChoice(
@@ -263,6 +265,7 @@ object JungleLoreCatalog {
                     rewardNectar = 8,
                     bondGain = 15,
                     rewardExp = 40,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.MUSHROOM_MELODY
                 )
             ),
@@ -285,7 +288,8 @@ object JungleLoreCatalog {
                     responseText = "Plip-plop-plip! Cool mist rainbows shimmer over the lagoon, granting +40 Hero EXP.",
                     rewardNectar = 14,
                     bondGain = 20,
-                    rewardExp = 40
+                    rewardExp = 40,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "dew_puzzle",
@@ -294,6 +298,7 @@ object JungleLoreCatalog {
                     rewardNectar = 10,
                     bondGain = 15,
                     rewardExp = 45,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.VINE_WEAVER
                 ),
                 StoryChoice(
@@ -303,6 +308,7 @@ object JungleLoreCatalog {
                     rewardNectar = 10,
                     bondGain = 15,
                     rewardExp = 45,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.FERN_MOSAIC
                 )
             ),
@@ -325,7 +331,8 @@ object JungleLoreCatalog {
                     responseText = "Aureowl hoots warmly and hands you a Moonstone Shard tucked inside a folded orchid petal.",
                     rewardNectar = 16,
                     bondGain = 22,
-                    rewardExp = 45
+                    rewardExp = 45,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "owl_spotter",
@@ -334,6 +341,7 @@ object JungleLoreCatalog {
                     rewardNectar = 10,
                     bondGain = 15,
                     rewardExp = 50,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.CANOPY_SPOTTER
                 ),
                 StoryChoice(
@@ -343,6 +351,7 @@ object JungleLoreCatalog {
                     rewardNectar = 10,
                     bondGain = 15,
                     rewardExp = 50,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.GROVE_GRID
                 )
             ),
@@ -365,7 +374,8 @@ object JungleLoreCatalog {
                     responseText = "A warm chord ripples through the cavern! Glimmertoad croaks happily and shares sparkling nectar.",
                     rewardNectar = 18,
                     bondGain = 25,
-                    rewardExp = 50
+                    rewardExp = 50,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "toad_puzzle",
@@ -374,6 +384,7 @@ object JungleLoreCatalog {
                     rewardNectar = 12,
                     bondGain = 18,
                     rewardExp = 55,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.MUSHROOM_MELODY
                 )
             ),
@@ -396,7 +407,8 @@ object JungleLoreCatalog {
                     responseText = "Velvetmoth dusts your cloak with shimmering pollen, brightening the upper canopy.",
                     rewardNectar = 20,
                     bondGain = 25,
-                    rewardExp = 55
+                    rewardExp = 55,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "moth_puzzle",
@@ -405,6 +417,7 @@ object JungleLoreCatalog {
                     rewardNectar = 12,
                     bondGain = 18,
                     rewardExp = 60,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.FERN_MOSAIC
                 )
             ),
@@ -427,7 +440,8 @@ object JungleLoreCatalog {
                     responseText = "Peaceful golden warmth washes over the gathering. Brambleback rumbles a gentle blessing.",
                     rewardNectar = 25,
                     bondGain = 30,
-                    rewardExp = 65
+                    rewardExp = 65,
+                    startsRpg = true,
                 ),
                 StoryChoice(
                     id = "turtle_puzzle",
@@ -436,6 +450,7 @@ object JungleLoreCatalog {
                     rewardNectar = 15,
                     bondGain = 20,
                     rewardExp = 70,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.SPIRIT_LOCK
                 ),
                 StoryChoice(
@@ -445,6 +460,7 @@ object JungleLoreCatalog {
                     rewardNectar = 15,
                     bondGain = 20,
                     rewardExp = 70,
+                    startsRpg = true,
                     opensPuzzle = PuzzleType.CANOPY_SPOTTER
                 )
             ),

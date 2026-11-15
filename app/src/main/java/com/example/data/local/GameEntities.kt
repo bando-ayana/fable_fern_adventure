@@ -30,7 +30,10 @@ data class PlayerProfileEntity(
     val communityProsperity: Int = 0,
     val completedMissionsCsv: String = "",
     val lootBagCsv: String = "sunberry_tonic:2,mana_vial:1",
-    val canopyRestored: Boolean = false
+    val canopyRestored: Boolean = false,
+    val dailyStreak: Int = 0,
+    val longestDailyStreak: Int = 0,
+    val lastActivityEpochDay: Long = -1L,
 ) {
     val totalXp: Int
         get() = memoryXp + logicXp + spatialXp + deductionXp + observationXp
