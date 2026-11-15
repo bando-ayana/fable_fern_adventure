@@ -85,6 +85,7 @@ fun MissionBattleSheet(
     onUseLoot: (LootItemType) -> Unit,
     onRetreat: () -> Unit,
     onDismiss: () -> Unit,
+    isRecordingMissionReward: Boolean,
     onLaunchPuzzle: (PuzzleType, Int?, Boolean) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -545,10 +546,26 @@ fun MissionBattleSheet(
                                     .padding(vertical = 24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = "Recording mission rewards...",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                if (isRecordingMissionReward) {
+                                    Text(
+                                        text = "Recording mission rewards...",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Mission rewards could not be recorded. Please return to Missions and try again.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Button(
+                                        onClick = onDismiss,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("mission_recording_failed_done_button")
+                                    ) {
+                                        Text("Back to Missions")
+                                    }
+                                }
                             }
                         } else if (!missionSummary.victory) {
                             Column(

@@ -155,6 +155,9 @@ class FernfableViewModel(
     private val _worldState = MutableStateFlow(RpgWorldState())
     val worldState: StateFlow<RpgWorldState> = _worldState.asStateFlow()
 
+    private val _isRecordingMissionRewards = MutableStateFlow(false)
+    val isRecordingMissionRewards = _isRecordingMissionRewards.asStateFlow()
+
     private var playbackJob: kotlinx.coroutines.Job? = null
 
     init {
@@ -960,17 +963,21 @@ class FernfableViewModel(
     }
 
     private fun finalizeMissionBattle(finalState: RpgBattleState) {
+        _isRecordingMissionRewards.value = true
         viewModelScope.launch {
-            runRepositoryAction {
-                val summary = repository.recordMissionOutcome(
-                    userId = currentUserId,
-                    mission = finalState.mission,
-                    victory = finalState.phase == BattlePhase.VICTORY,
-                    calmedSpirit = finalState.calmedSpirit,
-                    remainingMana = finalState.heroMana,
-                    usedLootInBattle = finalState.usedLootInBattle
-                )
-                _missionSummary.value = summary
+            try {
+                runRepositoryAction {
+                   _missionSummary.value = repository.recordMissionOutcome(
+                        userId = currentUserId,
+                        mission = finalState.mission,
+                        victory = finalState.phase == BattlePhase.VICTORY,
+                        calmedSpirit = finalState.calmedSpirit,
+                        remainingMana = finalState.heroMana,
+                        usedLootInBattle = finalState.usedLootInBattle
+                    )
+                }
+            } finally {
+                _isRecordingMissionRewards.value = false
             }
         }
     }

@@ -240,6 +240,7 @@ fun JungleAtmosphereBackground(
     val audioManager = remember(context.applicationContext) {
         FernfableAudioManager(context.applicationContext)
     }
+    val isRecordingMissionReward by viewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val useRail = screenWidthDp >= 600
@@ -457,6 +458,7 @@ fun JungleAtmosphereBackground(
             onUseLoot = viewModel::useBattleLoot,
             onRetreat = viewModel::retreatFromBattle,
             onDismiss = viewModel::dismissMissionSheet,
+            isRecordingMissionReward = isRecordingMissionReward,
             onLaunchPuzzle = { puzzleType, _, _ -> launchPuzzle(puzzleType, null, true) }
         )
     }
