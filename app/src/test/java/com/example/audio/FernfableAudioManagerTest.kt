@@ -1,10 +1,8 @@
-package com.example
+package com.example.audio
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.example.audio.AudioScene
-import com.example.audio.FernfableAudioManager
-import com.example.audio.SceneAudioTrack
+import com.example.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle

@@ -18,4 +18,9 @@
     <string name="audio_rpg_music_on">RPG Music On</string>
     <string name="audio_jungle_ambience_on">Jungle Ambience On</string>
     <string name="audio_muted">Sound Muted</string>
+    <string name="intro_skip">Skip Intro</string>
+    <string name="intro_begin_training">Begin Introductory Level</string>
+    <string name="intro_graduate_cta">Enter Solari Canopy (+20 Nectar)</string>
+    <string name="intro_glade_badge">Training Glade · Introductory Level</string>
+    <string name="intro_replay_cta">Replay Intro &amp; Tutorial</string>
 </resources>

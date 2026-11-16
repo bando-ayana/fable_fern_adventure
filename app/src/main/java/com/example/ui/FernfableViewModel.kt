@@ -33,6 +33,9 @@ import com.example.puzzle.VineWeaverEngine
 import com.example.rpg.BattleActionType
 import com.example.rpg.BattlePhase
 import com.example.rpg.InteractableKind
+import com.example.rpg.IntroStage
+import com.example.rpg.IntroTutorialEngine
+import com.example.rpg.IntroTutorialState
 import com.example.rpg.RpgBattleEngine
 import com.example.rpg.RpgBattleState
 import com.example.rpg.RpgWorldEngine
@@ -52,7 +55,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
 
 class FernfableViewModel(
     private val repository: GameRepository,
@@ -158,6 +160,11 @@ class FernfableViewModel(
     private val _isRecordingMissionRewards = MutableStateFlow(false)
     val isRecordingMissionRewards = _isRecordingMissionRewards.asStateFlow()
 
+    private val _isProfileLoaded = MutableStateFlow(false)
+    val isProfileLoaded: StateFlow<Boolean> = _isProfileLoaded.asStateFlow()
+
+    private val _introState = MutableStateFlow(IntroTutorialState())
+    val introState: StateFlow<IntroTutorialState> = _introState.asStateFlow()
     private var playbackJob: kotlinx.coroutines.Job? = null
 
     init {
@@ -173,6 +180,8 @@ class FernfableViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "Initial sanctuary seed failed", e)
                 _snackbarMessage.value = e.localizedMessage ?: "Couldn't initialize cloud sanctuary."
+            } finally {
+                _isProfileLoaded.value = true
             }
         }
     }
@@ -356,7 +365,7 @@ class FernfableViewModel(
                     statusBanner = "Round ${round.roundNumber} of ${round.totalRounds} — Watch closely!"
                 )
             }
-            delay(450L.milliseconds)
+            delay(450L)
             val pulseMs = when (_selectedDifficulty.value) {
                 DifficultyTier.SPROUT -> 460L
                 DifficultyTier.EXPLORER -> 380L
@@ -364,9 +373,9 @@ class FernfableViewModel(
             }
             for (blossomIdx in round.sequence) {
                 _fireflyState.update { it.copy(activeBlossomIdx = blossomIdx) }
-                delay(pulseMs.milliseconds)
+                delay(pulseMs)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
-                delay(180L.milliseconds)
+                delay(180L)
             }
             _fireflyState.update {
                 it.copy(
@@ -393,7 +402,7 @@ class FernfableViewModel(
             val nextInput = state.userInput + index
             viewModelScope.launch {
                 _fireflyState.update { it.copy(activeBlossomIdx = index) }
-                delay(160L.milliseconds)
+                delay(160L)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
             }
 
@@ -425,7 +434,7 @@ class FernfableViewModel(
                         )
                     }
                     viewModelScope.launch {
-                        delay(550L.milliseconds)
+                        delay(550L)
                         playFireflySequence()
                     }
                 }
@@ -453,7 +462,7 @@ class FernfableViewModel(
                         }
                     )
                 }
-                delay(550L.milliseconds)
+                delay(550L)
                 _fireflyState.update { it.copy(errorFlashIdx = null) }
                 playFireflySequence()
             }
@@ -762,7 +771,174 @@ class FernfableViewModel(
                     rawScore = rawScore
                 )
                 _completionResult.value = result
+                if (!uiState.value.profile.introCompleted &&
+                    _introState.value.stage == IntroStage.LESSON_PUZZLE_SHRINE
+                ) {
+                    _introState.update { cur ->
+                        val nextStage = IntroTutorialEngine.computeStage(
+                            inCutscene = false,
+                            lanternLit = cur.lanternLit,
+                            shrinePuzzleSolved = true,
+                            sproutlingDefeated = cur.sproutlingDefeated
+                        )
+                        val seq = cur.worldState.toastSeq + 1
+                        cur.copy(
+                            stage = nextStage,
+                            shrinePuzzleSolved = true,
+                            worldState = cur.worldState.copy(
+                                toastSeq = seq,
+                                worldToast = WorldToast(
+                                    id = seq,
+                                    text = "Shrine unlocked! Now head south to spar Mossback Sproutling!",
+                                    x = cur.worldState.heroX,
+                                    y = cur.worldState.heroY
+                                )
+                            )
+                        )
+                    }
+                }
             }
+        }
+    }
+
+    // --- Opening Cutscene & Introductory Training Level ---
+
+    fun setCutscenePage(page: Int) {
+        _introState.update { it.copy(cutscenePage = page.coerceIn(0, 3)) }
+    }
+
+    fun beginIntroTrainingLevel() {
+        _introState.value = IntroTutorialState(
+            stage = IntroStage.LESSON_MOVE_AND_LANTERN,
+            cutscenePage = 3,
+            worldState = IntroTutorialEngine.initialWorldState(),
+            lanternLit = false,
+            shrinePuzzleSolved = false,
+            sproutlingDefeated = false
+        )
+    }
+
+    fun skipIntroTutorial() {
+        viewModelScope.launch {
+            runRepositoryAction {
+                repository.markIntroCompleted(currentUserId, bonusNectar = 0)
+            }
+        }
+    }
+
+    fun completeIntroGraduation() {
+        viewModelScope.launch {
+            runRepositoryAction {
+                repository.markIntroCompleted(currentUserId, bonusNectar = 20)
+                _snackbarMessage.value = "Welcome to Solari Canopy! +20 Starter Sunbeam Nectar awarded."
+            }
+        }
+    }
+
+    fun replayIntroTutorial() {
+        _introState.value = IntroTutorialState(
+            stage = IntroStage.CUTSCENE,
+            cutscenePage = 0,
+            worldState = IntroTutorialEngine.initialWorldState()
+        )
+        viewModelScope.launch {
+            runRepositoryAction {
+                repository.resetIntroTutorial(currentUserId)
+            }
+        }
+    }
+
+    fun stepIntroWorldFrame(joyX: Float, joyY: Float, deltaSec: Float) {
+        if (_activeBattle.value != null) return
+        val current = _introState.value
+        val (nextWorld, engaged) = IntroTutorialEngine.stepWorld(current, joyX, joyY, deltaSec)
+        _introState.update { it.copy(worldState = nextWorld) }
+        if (engaged != null) {
+            startMission(RpgMissionCatalog.introMission, skipPrepToCombat = true)
+        }
+    }
+
+    fun setIntroTapTarget(x: Float, y: Float) {
+        val clampedX = x.coerceIn(0.6f, IntroTutorialEngine.MAP_WIDTH - 0.6f)
+        val clampedY = y.coerceIn(0.6f, IntroTutorialEngine.MAP_HEIGHT - 0.6f)
+        _introState.update { cur ->
+            cur.copy(
+                worldState = cur.worldState.copy(
+                    tapTarget = clampedX to clampedY,
+                    dialogueSpeaker = null,
+                    dialogueBody = null
+                )
+            )
+        }
+    }
+
+    fun showIntroDialogue(speaker: String, body: String) {
+        _introState.update { cur ->
+            cur.copy(
+                worldState = cur.worldState.copy(
+                    tapTarget = null,
+                    dialogueSpeaker = speaker,
+                    dialogueBody = body
+                )
+            )
+        }
+    }
+
+    fun dismissIntroDialogue() {
+        _introState.update { cur ->
+            cur.copy(
+                worldState = cur.worldState.copy(
+                    dialogueSpeaker = null,
+                    dialogueBody = null
+                )
+            )
+        }
+    }
+
+    fun postIntroToast(text: String) {
+        _introState.update { cur ->
+            val seq = cur.worldState.toastSeq + 1
+            cur.copy(
+                worldState = cur.worldState.copy(
+                    toastSeq = seq,
+                    worldToast = WorldToast(
+                        id = seq,
+                        text = text,
+                        x = cur.worldState.heroX,
+                        y = cur.worldState.heroY
+                    )
+                )
+            )
+        }
+    }
+
+    fun interactWithIntroLantern(lanternId: String, title: String) {
+        val current = _introState.value
+        val alreadyLit = lanternId in current.worldState.litLanternIds
+        _introState.update { cur ->
+            val nextStage = IntroTutorialEngine.computeStage(
+                inCutscene = false,
+                lanternLit = true,
+                shrinePuzzleSolved = cur.shrinePuzzleSolved,
+                sproutlingDefeated = cur.sproutlingDefeated
+            )
+            cur.copy(
+                stage = nextStage,
+                lanternLit = true,
+                worldState = cur.worldState.copy(
+                    litLanternIds = cur.worldState.litLanternIds + lanternId
+                )
+            )
+        }
+        if (!alreadyLit) {
+            postIntroToast("$title lit! +5 Nectar — Next: Firefly Shrine east!")
+            viewModelScope.launch {
+                runRepositoryAction {
+                    repository.forageWorldResource(currentUserId, nectarGain = 5)
+                }
+            }
+        } else {
+            postIntroToast("$title shines brightly!")
         }
     }
 
@@ -937,6 +1113,9 @@ class FernfableViewModel(
         _activeBattle.value = null
         _missionSummary.value = null
         _worldState.update { RpgWorldEngine.applyBattleCooldownAll(it) }
+        _introState.update { cur ->
+            cur.copy(worldState = RpgWorldEngine.applyBattleCooldownAll(cur.worldState))
+        }
     }
 
     fun restManaAtSanctuary() {
@@ -945,6 +1124,7 @@ class FernfableViewModel(
                 val maxMana = repository.restAtSanctuary(currentUserId)
                 _snackbarMessage.value = "Mana restored to $maxMana/$maxMana at the Sanctuary!"
                 postWorldToast("Mana restored to $maxMana/$maxMana!")
+                postIntroToast("Mana restored to $maxMana/$maxMana!")
             }
         }
     }
@@ -963,21 +1143,34 @@ class FernfableViewModel(
     }
 
     private fun finalizeMissionBattle(finalState: RpgBattleState) {
-        _isRecordingMissionRewards.value = true
         viewModelScope.launch {
-            try {
-                runRepositoryAction {
-                   _missionSummary.value = repository.recordMissionOutcome(
-                        userId = currentUserId,
-                        mission = finalState.mission,
-                        victory = finalState.phase == BattlePhase.VICTORY,
-                        calmedSpirit = finalState.calmedSpirit,
-                        remainingMana = finalState.heroMana,
-                        usedLootInBattle = finalState.usedLootInBattle
-                    )
+            runRepositoryAction {
+                val summary = repository.recordMissionOutcome(
+                    userId = currentUserId,
+                    mission = finalState.mission,
+                    victory = finalState.phase == BattlePhase.VICTORY,
+                    calmedSpirit = finalState.calmedSpirit,
+                    remainingMana = finalState.heroMana,
+                    usedLootInBattle = finalState.usedLootInBattle
+                )
+                _missionSummary.value = summary
+                if (finalState.phase == BattlePhase.VICTORY &&
+                    finalState.mission.id == RpgMissionCatalog.introMission.id
+                ) {
+                    _introState.update { cur ->
+                        val nextStage = IntroTutorialEngine.computeStage(
+                            inCutscene = false,
+                            lanternLit = cur.lanternLit,
+                            shrinePuzzleSolved = cur.shrinePuzzleSolved,
+                            sproutlingDefeated = true
+                        )
+                        cur.copy(
+                            stage = nextStage,
+                            sproutlingDefeated = true,
+                            worldState = RpgWorldEngine.applyBattleCooldownAll(cur.worldState)
+                        )
+                    }
                 }
-            } finally {
-                _isRecordingMissionRewards.value = false
             }
         }
     }
@@ -1008,3 +1201,4 @@ class FernfableViewModel(
         }
     }
 }
+

@@ -48,7 +48,7 @@ data class RpgBattleState(
     val canCastWard: Boolean get() = heroMana >= RpgBattleEngine.WARD_SPELL_COST
     val canSootheSpirit: Boolean get() =
         enemyHp <= (enemyMaxHp * 0.45f).toInt().coerceAtLeast(1) &&
-                heroMana >= RpgBattleEngine.SOOTHE_SPELL_COST
+            heroMana >= RpgBattleEngine.SOOTHE_SPELL_COST
 }
 
 object RpgBattleEngine {

@@ -124,7 +124,6 @@ fun PuzzleHubScreen(
                                     DifficultyTier.EXPLORER -> "1.35x"
                                     DifficultyTier.ELDER -> "1.75x"
                                 }
-
                                 FilterChip(
                                     selected = uiState.selectedDifficulty == tier,
                                     onClick = { onSelectDifficulty(tier) },
@@ -380,84 +379,83 @@ private fun PuzzleSanctuaryCard(
                         tint = FireflyGoldAccent,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Best $bestScore points",
+                        text = "Best $bestScore pts",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = "Stars earned",
+                        tint = FireflyGoldAccent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "$totalStars",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "$solvedCount won",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = "Stars earned",
-                tint = FireflyGoldAccent,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                text = "$totalStars",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Text(
-            text = "$solvedCount won",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-
-    Button(
-        onClick = { onPlayLevel(currentLevel) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("play_puzzle_${puzzle.id}")
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.PlayArrow,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = if (solvedCount > 0) {
-                "Play Level $currentLevel · Beat $bestScore pts"
-            } else {
-                "Play Level $currentLevel"
-            }
-        )
-    }
-
-    if (currentLevel > 1 || solvedCount > 0) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Replay unlocked levels for higher points:",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Button(
+                onClick = { onPlayLevel(currentLevel) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("play_puzzle_${puzzle.id}")
             ) {
-                items(replayableLevels, key = { "${puzzle.id}_lv_$it" }) { lvl ->
-                    OutlinedButton(
-                        onClick = { onPlayLevel(lvl) },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.testTag(
-                            if (lvl == 1) "warmup_puzzle_${puzzle.id}" else "replay_${puzzle.id}_lv_$lvl"
-                        )
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (solvedCount > 0) {
+                        "Play Level $currentLevel · Beat $bestScore pts"
+                    } else {
+                        "Play Level $currentLevel"
+                    }
+                )
+            }
+
+            if (currentLevel > 1 || solvedCount > 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Replay unlocked levels for higher points:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Replay,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Lv.$lvl")
+                        items(replayableLevels, key = { "${puzzle.id}_lv_$it" }) { lvl ->
+                            OutlinedButton(
+                                onClick = { onPlayLevel(lvl) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.testTag(
+                                    if (lvl == 1) "warmup_puzzle_${puzzle.id}" else "replay_${puzzle.id}_lv_$lvl"
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Replay,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Lv.$lvl")
+                            }
+                        }
                     }
                 }
             }
@@ -498,39 +496,36 @@ private fun LockedPuzzleCard(
                         )
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = puzzle.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = puzzle.skill.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            text = puzzle.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = puzzle.skill.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
                     }
+                    Text(
+                        text = puzzle.discoveryHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    text = puzzle.discoveryHint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -540,12 +535,14 @@ private fun LockedPuzzleCard(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("locked_go_grove_${puzzle.id}")
-                    ) {
+                ) {
                     Icon(
                         imageVector = Icons.Rounded.Explore,
-                        contentDescription = "Explore",
+                        contentDescription = null,
                         modifier = Modifier.size(15.dp)
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Grove")
                 }
                 OutlinedButton(
                     onClick = onNavigateToMissions,
@@ -561,7 +558,6 @@ private fun LockedPuzzleCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Missions")
                 }
-
             }
         }
     }

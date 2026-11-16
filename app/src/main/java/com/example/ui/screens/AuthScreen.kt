@@ -59,7 +59,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
-import com.example.BuildConfig
 import com.example.R
 import com.example.ui.components.JungleAtmosphereBackground
 import com.example.ui.theme.DewTealAccent
@@ -160,25 +159,6 @@ fun AuthScreen(
             } catch (e: Exception) {
                 Log.e(AUTH_TAG, "Firebase Google Auth failure", e)
                 statusMessage = e.localizedMessage ?: "Authentication failed. Please try again."
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    fun launchDebugSignIn() {
-        if (!BuildConfig.DEBUG || isLoading) return
-
-        scope.launch {
-            isLoading = true
-            statusMessage = null
-            try {
-                Firebase.auth.signInAnonymously().await()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(AUTH_TAG, "Debug anonymous sign-in failed", e)
-                statusMessage = e.localizedMessage ?: "Couldn't start a test session. Please try again."
             } finally {
                 isLoading = false
             }
@@ -338,24 +318,6 @@ fun AuthScreen(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
                                         text = "Continue with Google",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            if (BuildConfig.DEBUG) {
-                                Button(
-                                    onClick = ::launchDebugSignIn,
-                                    enabled = !isLoading,
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(54.dp)
-                                        .testTag("debug_guest_sign_in_button")
-                                ) {
-                                    Text(
-                                        text = "Continue as test guest",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )

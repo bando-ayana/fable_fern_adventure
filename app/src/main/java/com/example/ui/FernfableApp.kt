@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -32,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -56,12 +59,15 @@ import com.example.R
 import com.example.audio.AudioScene
 import com.example.audio.FernfableAudioManager
 import com.example.model.PuzzleType
+import com.example.rpg.IntroStage
 import com.example.stateHolder.FernfableUiState
 import com.example.ui.screens.BestiaryScreen
 import com.example.ui.screens.BrainSkillsScreen
 import com.example.ui.screens.GroveScreen
+import com.example.ui.screens.IntroTutorialScreen
 import com.example.ui.screens.MissionBattleSheet
 import com.example.ui.screens.MissionsScreen
+import com.example.ui.screens.OpeningCutsceneScreen
 import com.example.ui.screens.PuzzleHubScreen
 import com.example.ui.screens.PuzzlePlayScreen
 
@@ -128,7 +134,6 @@ fun FernfableApp(
 ) {
     val navController = rememberNavController()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val audioManager = remember(context.applicationContext) {
@@ -139,6 +144,7 @@ fun FernfableApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isPlayingPuzzle = currentRoute == FernfableRoutes.PLAY_PUZZLE
+
 
     DisposableEffect(lifecycleOwner, audioManager) {
         val observer = LifecycleEventObserver { _, event ->
@@ -240,8 +246,12 @@ fun JungleAtmosphereBackground(
     val audioManager = remember(context.applicationContext) {
         FernfableAudioManager(context.applicationContext)
     }
+    val isProfileLoaded by viewModel.isProfileLoaded.collectAsStateWithLifecycle()
     val isRecordingMissionReward by viewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
+    val isInOnboarding = !isProfileLoaded || !uiState.profile.introCompleted
+    val introState by viewModel.introState.collectAsStateWithLifecycle()
+
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val useRail = screenWidthDp >= 600
 
@@ -250,7 +260,7 @@ fun JungleAtmosphereBackground(
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            if (!useRail && !isPlayingPuzzle) {
+            if (!useRail && !isPlayingPuzzle && !isInOnboarding) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                 ) {
@@ -281,7 +291,7 @@ fun JungleAtmosphereBackground(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (useRail && !isPlayingPuzzle) {
+            if (useRail && !isPlayingPuzzle && !isInOnboarding) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
                 ) {
@@ -312,34 +322,78 @@ fun JungleAtmosphereBackground(
                 modifier = Modifier.weight(1f)
             ) {
                 composable(FernfableRoutes.GROVE) {
-                    GroveScreen(
-                        uiState = uiState,
-                        worldState = worldState,
-                        hasActiveBattle = activeBattle != null,
-                        activeEncounter = activeEncounter,
-                        encounterFeedback = encounterFeedback,
-                        userEmail = userEmail,
-                        isAudioMuted = isAudioMuted,
-                        onToggleAudioMute = audioManager::toggleMute,
-                        onSignOut = onSignOut,
-                        onOpenBiome = viewModel::openBiomeEncounter,
-                        onDismissEncounter = viewModel::dismissEncounter,
-                        onChooseStoryOption = viewModel::chooseStoryOption,
-                        onSelectHero = viewModel::selectHero,
-                        onCraftOrEquipRelic = viewModel::craftOrEquipRelic,
-                        onLaunchPuzzle = { puzzleType -> launchPuzzle(puzzleType, null, true) },
-                        onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
-                        onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) },
-                        onStepWorldFrame = viewModel::stepWorldFrame,
-                        onSetWorldTapTarget = viewModel::setWorldTapTarget,
-                        onShowWorldDialogue = viewModel::showWorldDialogue,
-                        onDismissWorldDialogue = viewModel::dismissWorldDialogue,
-                        onPostWorldToast = viewModel::postWorldToast,
-                        onInteractLantern = viewModel::interactWithWorldLantern,
-                        onForageObject = viewModel::forageWorldObject,
-                        onRestMana = viewModel::restManaAtSanctuary,
-                        onStartWorldMission = viewModel::startMission
-                    )
+                    if (!isProfileLoaded) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                    } else if (!uiState.profile.introCompleted) {
+                        if (introState.stage == IntroStage.CUTSCENE) {
+                            OpeningCutsceneScreen(
+                                page = introState.cutscenePage,
+                                heroId = uiState.profile.selectedHeroId,
+                                isAudioMuted = isAudioMuted,
+                                onToggleAudioMute = audioManager::toggleMute,
+                                onPageChange = viewModel::setCutscenePage,
+                                onBeginTraining = viewModel::beginIntroTrainingLevel,
+                                onSkipIntro = viewModel::skipIntroTutorial
+                            )
+                        } else {
+                            IntroTutorialScreen(
+                                introState = introState,
+                                heroId = uiState.profile.selectedHeroId,
+                                heroLevel = uiState.profile.heroLevel,
+                                mana = uiState.profile.mana,
+                                maxMana = uiState.profile.maxMana,
+                                nectar = uiState.profile.nectar,
+                                isAudioMuted = isAudioMuted,
+                                hasActiveBattle = activeBattle != null,
+                                onToggleAudioMute = audioManager::toggleMute,
+                                onSkipIntro = viewModel::skipIntroTutorial,
+                                onGraduateToWorld = viewModel::completeIntroGraduation,
+                                onStepFrame = viewModel::stepIntroWorldFrame,
+                                onSetTapTarget = viewModel::setIntroTapTarget,
+                                onInteractLantern = viewModel::interactWithIntroLantern,
+                                onLaunchIntroPuzzle = { puzzleType -> launchPuzzle(puzzleType, 1, true) },
+                                onStartIntroBattle = viewModel::startMission,
+                                onRestMana = viewModel::restManaAtSanctuary,
+                                onShowDialogue = viewModel::showIntroDialogue,
+                                onDismissDialogue = viewModel::dismissIntroDialogue
+                            )
+                        }
+                    } else {
+                        GroveScreen(
+                            uiState = uiState,
+                            worldState = worldState,
+                            hasActiveBattle = activeBattle != null,
+                            activeEncounter = activeEncounter,
+                            encounterFeedback = encounterFeedback,
+                            userEmail = userEmail,
+                            isAudioMuted = isAudioMuted,
+                            onToggleAudioMute = audioManager::toggleMute,
+                            onSignOut = onSignOut,
+                            onOpenBiome = viewModel::openBiomeEncounter,
+                            onDismissEncounter = viewModel::dismissEncounter,
+                            onChooseStoryOption = viewModel::chooseStoryOption,
+                            onSelectHero = viewModel::selectHero,
+                            onCraftOrEquipRelic = viewModel::craftOrEquipRelic,
+                            onLaunchPuzzle = { puzzleType ->launchPuzzle(puzzleType, null, true) },
+                            onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
+                            onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) },
+                            onStepWorldFrame = viewModel::stepWorldFrame,
+                            onSetWorldTapTarget = viewModel::setWorldTapTarget,
+                            onShowWorldDialogue = viewModel::showWorldDialogue,
+                            onDismissWorldDialogue = viewModel::dismissWorldDialogue,
+                            onPostWorldToast = viewModel::postWorldToast,
+                            onInteractLantern = viewModel::interactWithWorldLantern,
+                            onForageObject = viewModel::forageWorldObject,
+                            onRestMana = viewModel::restManaAtSanctuary,
+                            onStartWorldMission = viewModel::startMission,
+                            onReplayIntro = viewModel::replayIntroTutorial
+                        )
+                    }
                 }
 
                 composable(FernfableRoutes.MISSIONS) {

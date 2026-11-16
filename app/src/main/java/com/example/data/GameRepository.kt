@@ -150,7 +150,8 @@ class GameRepository(private val db: FirebaseFirestore) {
             !profileSnap.contains("canopyRestored") ||
             !profileSnap.contains("dailyStreak") ||
             !profileSnap.contains("longestDailyStreak") ||
-            !profileSnap.contains("lastActivityEpochDay")
+            !profileSnap.contains("lastActivityEpochDay") ||
+            !profileSnap.contains("introCompleted")
         ) {
             val defaults = PlayerProfileEntity()
             val migrationPatch = mutableMapOf<String, Any>()
@@ -163,6 +164,7 @@ class GameRepository(private val db: FirebaseFirestore) {
             if (!profileSnap.contains("dailyStreak")) migrationPatch["dailyStreak"] = defaults.dailyStreak
             if (!profileSnap.contains("longestDailyStreak")) migrationPatch["longestDailyStreak"] = defaults.longestDailyStreak
             if (!profileSnap.contains("lastActivityEpochDay")) migrationPatch["lastActivityEpochDay"] = defaults.lastActivityEpochDay
+            if (!profileSnap.contains("introCompleted")) migrationPatch["introCompleted"] = defaults.introCompleted
             migrationPatch["updatedAt"] = FieldValue.serverTimestamp()
             batch.update(profileRef, migrationPatch)
             hasWrites = true
@@ -263,6 +265,26 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun markIntroCompleted(userId: String, bonusNectar: Int = 0) {
+        ensureSeeded(userId)
+        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val fields = mutableMapOf<String, Any>("introCompleted" to true)
+        val extra = bonusNectar.coerceAtLeast(0)
+        if (!current.introCompleted && extra > 0) {
+            fields["nectar"] = current.nectar + extra
+        }
+        updateProfileFields(userId = userId, fields = fields)
+        if (!current.introCompleted && extra > 0) {
+            unlockBiomesForNectar(userId, current.nectar + extra)
+            syncDiscoveredLore(userId)
+        }
+    }
+
+    suspend fun resetIntroTutorial(userId: String) {
+        ensureSeeded(userId)
+        updateProfileFields(userId = userId, fields = mapOf("introCompleted" to false))
+    }
+
     suspend fun markPuzzleAccessed(userId: String, puzzleType: PuzzleType) {
         ensureSeeded(userId)
         val existing = getPuzzleStatsOnce(userId, puzzleType.id)
@@ -337,10 +359,10 @@ class GameRepository(private val db: FirebaseFirestore) {
             ?: PuzzleStatsEntity(puzzleType = puzzleType.id)
 
         val nectarEarned = ((puzzleType.baseNectarReward + levelPlayed * 2) * difficulty.rewardMultiplier).roundToInt() +
-                hero.bonusNectarPerPuzzle + relic.bonusNectar
+            hero.bonusNectarPerPuzzle + relic.bonusNectar
         val moonstonesEarned = if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
         val skillXpEarned = difficulty.xpBonus + starsEarned * 5 + (rawScore / 25).coerceAtMost(20) +
-                hero.bonusSkillXp
+            hero.bonusSkillXp
         val heroExpGain = 35 + starsEarned * 10
         val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, heroExpGain)
         val newStreak = currentProfile.currentStreak + 1

@@ -627,7 +627,7 @@ fun MissionBattleSheet(
                                 }
                                 Text(
                                     text = "Community built: ${missionSummary.mission.communityProject}" +
-                                            if (missionSummary.prosperityGained > 0) " (+${missionSummary.prosperityGained}% Prosperity)" else "",
+                                        if (missionSummary.prosperityGained > 0) " (+${missionSummary.prosperityGained}% Prosperity)" else "",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     textAlign = TextAlign.Center

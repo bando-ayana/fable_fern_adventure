@@ -43,7 +43,8 @@ data class FirestoreUserProfile(
     val dailyStreak: Int = 0,
     val longestDailyStreak: Int = 0,
     val lastActivityEpochDay: Long = -1L,
-        @ServerTimestamp val createdAt: Timestamp? = null,
+    val introCompleted: Boolean = false,
+    @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
     fun toEntity(): PlayerProfileEntity = PlayerProfileEntity(
@@ -75,7 +76,8 @@ data class FirestoreUserProfile(
         canopyRestored = canopyRestored,
         dailyStreak = dailyStreak,
         longestDailyStreak = longestDailyStreak,
-        lastActivityEpochDay = lastActivityEpochDay
+        lastActivityEpochDay = lastActivityEpochDay,
+        introCompleted = introCompleted
     )
 
     companion object {
@@ -118,6 +120,7 @@ data class FirestoreUserProfile(
                 "dailyStreak" to defaults.dailyStreak,
                 "longestDailyStreak" to defaults.longestDailyStreak,
                 "lastActivityEpochDay" to defaults.lastActivityEpochDay,
+                "introCompleted" to defaults.introCompleted,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             ).filterValues { it != null } as Map<String, Any>

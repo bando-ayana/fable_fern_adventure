@@ -27,10 +27,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Forest
-import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Star
@@ -167,7 +167,7 @@ fun PuzzlePlayScreen(
                         modifier = Modifier.testTag("puzzle_guide_toggle")
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.HelpOutline,
+                            imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
                             contentDescription = "Toggle how to play guide"
                         )
                     }
@@ -391,26 +391,25 @@ fun PuzzlePlayScreen(
                 AnimatedVisibility(
                     visible = completionResult != null,
                     enter = fadeIn(tween(240)) +
-                            slideInVertically(initialOffsetY = { it / 4 }) +
-                            scaleIn(
-                                initialScale = 0.9f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                            ),
+                        slideInVertically(initialOffsetY = { it / 4 }) +
+                        scaleIn(
+                            initialScale = 0.9f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                        ),
                     exit = fadeOut(tween(150))
                 ) {
-                    val result = completionResult
-                    if (result != null) {
+                    if (completionResult != null) {
                         Column {
                             Spacer(modifier = Modifier.height(20.dp))
                             PuzzleCelebrationCard(
-                                result = result,
+                                result = completionResult,
                                 onNextLevel = {
-                                    val next = result.nextLevelUnlocked
+                                    val next = completionResult.nextLevelUnlocked
                                     onDismissCompletion()
                                     onRestartLevel(next)
                                 },
                                 onReplayLevel = {
-                                    val current = result.completedLevel
+                                    val current = completionResult.completedLevel
                                     onDismissCompletion()
                                     onRestartLevel(current)
                                 },

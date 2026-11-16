@@ -117,6 +117,7 @@ fun GroveScreen(
     onForageObject: (String, InteractableKind, String) -> Unit = { _, _, _ -> },
     onRestMana: () -> Unit = {},
     onStartWorldMission: (CommunityMission, Boolean) -> Unit = { _, _ -> },
+    onReplayIntro: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val profile = uiState.profile
@@ -138,7 +139,7 @@ fun GroveScreen(
     val totalTech = activeHero.baseTech + equippedRelic.techBonus + (profile.heroLevel - 1)
     val totalHeart = activeHero.baseHeart + equippedRelic.heartBonus + (profile.heroLevel - 1)
     val isWorldPaused = showCampChapters || showHeroRoster || showRelicForge || showQuestLog ||
-            showSignOutDialog || activeEncounter != null || hasActiveBattle
+        showSignOutDialog || activeEncounter != null || hasActiveBattle
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -374,424 +375,122 @@ fun GroveScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    if (uiState.syncError != null) {
-                        item {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = uiState.syncError,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.padding(12.dp)
-                                )
-                            }
-                        }
+            if (uiState.syncError != null) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = uiState.syncError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
                     }
-                    item {
-                        // Storybook Canopy Hero Card
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            tonalElevation = 4.dp,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(modifier = Modifier.height(220.dp)) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.img_jungle_canopy_hero),
-                                    contentDescription = stringResource(R.string.cd_jungle_hero),
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color(0x550D1E16),
-                                                    Color(0xAA0D1E16),
-                                                    Color(0xEA0B1912)
-                                                )
-                                            )
-                                        )
-                                )
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(18.dp),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(50),
-                                            color = Color(0xCC163326)
-                                        ) {
-                                            Text(
-                                                text = profile.explorerRank,
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = Color(0xFFFFE7A3),
-                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                            )
-                                        }
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            ResourcePill(
-                                                icon = Icons.Rounded.WaterDrop,
-                                                tint = FireflyGoldAccent,
-                                                value = profile.nectar.toString(),
-                                                label = stringResource(R.string.cd_nectar)
-                                            )
-                                            ResourcePill(
-                                                icon = Icons.Rounded.NightsStay,
-                                                tint = Color(0xFFB7C4FF),
-                                                value = profile.moonstones.toString(),
-                                                label = stringResource(R.string.cd_moonstone)
-                                            )
-                                        }
-                                    }
-
-                                    Column {
-                                        Text(
-                                            text = "Fernfable",
-                                            style = MaterialTheme.typography.displaySmall,
-                                            color = Color.White
-                                        )
-                                        Text(
-                                            text = "Solari Magitech Canopy · Mythical Jungle RPG",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color(0xFFDCEEE2)
-                                        )
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            val accessedCount = uiState.puzzleStats.values.count { it.accessed }
-                                            Button(
-                                                onClick = onOpenPuzzleHub,
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .testTag("hero_anytime_puzzle_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Extension,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "Puzzles ($accessedCount/${PuzzleType.entries.size})",
-                                                    maxLines = 1
-                                                )
-                                            }
-                                            FilledTonalButton(
-                                                onClick = {
-                                                    questLogInitialTab = 0
-                                                    showQuestLog = true
-                                                },
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .testTag("hero_quest_log_button")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = if (profile.dailyStreak > 0) {
-                                                        "Quests · ${profile.dailyStreak}d"
-                                                    } else {
-                                                        "Quest Log"
-                                                    },
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        // Active Hero RPG Party & Gear HUD Card
-                        Surface(
-                            shape = RoundedCornerShape(24.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 3.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                }
+            }
+            item {
+                // Storybook Canopy Hero Card
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(modifier = Modifier.height(220.dp)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.img_jungle_canopy_hero),
+                            contentDescription = stringResource(R.string.cd_jungle_hero),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("rpg_hero_hud_card")
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color(0x550D1E16),
+                                            Color(0xAA0D1E16),
+                                            Color(0xEA0B1912)
+                                        )
+                                    )
+                                )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(18.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    HeroAvatar(
-                                        heroId = activeHero.id,
-                                        unlocked = true,
-                                        shape = RoundedCornerShape(18.dp),
-                                        modifier = Modifier.size(66.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text(
-                                                text = activeHero.name,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Surface(
-                                                shape = RoundedCornerShape(50),
-                                                color = MaterialTheme.colorScheme.primaryContainer
-                                            ) {
-                                                Text(
-                                                    text = "Lv. ${profile.heroLevel}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = "${activeHero.title} · ${activeHero.heritage}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        LinearProgressIndicator(
-                                            progress = {
-                                                (profile.heroExp.toFloat() / profile.expForNextLevel.toFloat()).coerceIn(0f, 1f)
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Text(
-                                            text = "EXP ${profile.heroExp}/${profile.expForNextLevel} · Gear: ${equippedRelic.name}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    RpgStatChip("Magic ${totalMagic + profile.arcanePowerBonus}", StarlightVioletAccent, Modifier.weight(1f))
-                                    RpgStatChip("Mana ${profile.mana}/${profile.maxMana}", DewTealAccent, Modifier.weight(1f))
-                                    RpgStatChip("Town ${profile.communityProsperity}%", FernEmeraldAccent, Modifier.weight(1f))
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    FilledTonalButton(
-                                        onClick = { showHeroRoster = true },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("open_hero_roster_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Groups,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Heroes & Allies")
-                                    }
-                                    OutlinedButton(
-                                        onClick = { showRelicForge = true },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("open_relic_forge_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Build,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Magitech Gear")
-                                    }
-                                }
-
-                                Button(
-                                    onClick = onOpenMissions,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("grove_open_missions_button")
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color(0xCC163326)
                                 ) {
                                     Text(
-                                        text = if (profile.canopyRestored) {
-                                            "Community Missions & Wild Patrols (Crown Restored!)"
-                                        } else {
-                                            "Go on Community Missions & Wild Battles (${profile.communityProsperity}%)"
-                                        }
+                                        text = profile.explorerRank,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = Color(0xFFFFE7A3),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                     )
                                 }
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.CloudDone,
-                                        contentDescription = "Cloud synced",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ResourcePill(
+                                        icon = Icons.Rounded.WaterDrop,
+                                        tint = FireflyGoldAccent,
+                                        value = profile.nectar.toString(),
+                                        label = stringResource(R.string.cd_nectar)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = userEmail?.takeIf { it.isNotBlank() }?.let { "Cloud Sync · $it" }
-                                            ?: "Cloud Sanctuary Synced",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
+                                    ResourcePill(
+                                        icon = Icons.Rounded.NightsStay,
+                                        tint = Color(0xFFB7C4FF),
+                                        value = profile.moonstones.toString(),
+                                        label = stringResource(R.string.cd_moonstone)
                                     )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    FilledTonalButton(
-                                        onClick = onToggleAudioMute,
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                        modifier = Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .testTag("grove_audio_toggle")
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isAudioMuted) {
-                                                Icons.AutoMirrored.Rounded.VolumeOff
-                                            } else {
-                                                Icons.Rounded.MusicNote
-                                            },
-                                            contentDescription = stringResource(R.string.cd_toggle_audio),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(
-                                                if (isAudioMuted) R.string.audio_muted else R.string.audio_rpg_music_on
-                                            ),
-                                            style = MaterialTheme.typography.labelMedium
-                                        )
-                                    }
-
-                                    TextButton(
-                                        onClick = { showSignOutDialog = true },
-                                        modifier = Modifier.testTag("sign_out_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.Logout,
-                                            contentDescription = "Sign out",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Sign Out")
-                                    }
                                 }
                             }
-                        }
-                    }
 
-                    item {
-                        // Active RPG Quest Tracker Card
-                        val questBiomeUnlocked = profile.nectar >= nextQuestBiome.unlockNectar
-                        val allQuestsDone = JungleLoreCatalog.biomes.all { it.id in profile.completedQuestIds }
-
-                        Surface(
-                            shape = RoundedCornerShape(22.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f),
-                            border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.45f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .background(FireflyGoldAccent.copy(alpha = 0.22f), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onTertiaryContainer
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (allQuestsDone) "All Canopy Quests Awakened!" else nextQuestBiome.questTitle,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                                        )
-                                        val goalMsg = when {
-                                            allQuestsDone -> "Every grove shines! Keep mastering all 7 mini-puzzles & welcoming allies."
-                                            questBiomeUnlocked -> nextQuestBiome.questObjective
-                                            nextLockedBiome != null -> {
-                                                val remaining = (nextLockedBiome.unlockNectar - profile.nectar).coerceAtLeast(1)
-                                                "Earn $remaining more Sunbeam Nectar from mini-puzzles to unlock ${nextLockedBiome.name}."
-                                            }
-                                            else -> nextQuestBiome.questObjective
-                                        }
-                                        Text(
-                                            text = goalMsg,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                                        )
-                                    }
-                                }
-
+                            Column {
+                                Text(
+                                    text = "Fernfable",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Solari Magitech Canopy · Mythical Jungle RPG",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFDCEEE2)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    if (questBiomeUnlocked) {
-                                        Button(
-                                            onClick = { onOpenBiome(nextQuestBiome) },
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .testTag("continue_quest_button")
-                                        ) {
-                                            Text("Enter Quest")
-                                        }
-                                    }
-                                    OutlinedButton(
-                                        onClick = { onLaunchPuzzle(nextQuestBiome.signaturePuzzle) },
+                                    val accessedCount = uiState.puzzleStats.values.count { it.accessed }
+                                    Button(
+                                        onClick = onOpenPuzzleHub,
                                         modifier = Modifier
                                             .weight(1f)
-                                            .testTag("quest_quick_puzzle_button")
+                                            .testTag("hero_anytime_puzzle_button")
                                     ) {
-                                        Text("Play ${nextQuestBiome.signaturePuzzle.title}")
+                                        Icon(
+                                            imageVector = Icons.Rounded.Extension,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Puzzles ($accessedCount/${PuzzleType.entries.size})",
+                                            maxLines = 1
+                                        )
                                     }
-                                }
-
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
                                     FilledTonalButton(
                                         onClick = {
                                             questLogInitialTab = 0
@@ -799,58 +498,375 @@ fun GroveScreen(
                                         },
                                         modifier = Modifier
                                             .weight(1f)
-                                            .testTag("open_quest_log_button")
+                                            .testTag("hero_quest_log_button")
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                             contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Quest Log (${profile.completedQuestIds.size}/${JungleLoreCatalog.biomes.size})")
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            questLogInitialTab = 2
-                                            showQuestLog = true
-                                        },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("open_lore_log_button")
-                                    ) {
-                                        Text("Discovered Lore")
+                                        Text(
+                                            text = if (profile.dailyStreak > 0) {
+                                                "Quests · ${profile.dailyStreak}d"
+                                            } else {
+                                                "Quest Log"
+                                            },
+                                            maxLines = 1
+                                        )
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
 
-                    item {
-                        Text(
-                            text = "Mythical Jungle Chapters",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+            item {
+                // Active Hero RPG Party & Gear HUD Card
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 3.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("rpg_hero_hud_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            HeroAvatar(
+                                heroId = activeHero.id,
+                                unlocked = true,
+                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier.size(66.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = activeHero.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            text = "Lv. ${profile.heroLevel}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "${activeHero.title} · ${activeHero.heritage}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = {
+                                        (profile.heroExp.toFloat() / profile.expForNextLevel.toFloat()).coerceIn(0f, 1f)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Text(
+                                    text = "EXP ${profile.heroExp}/${profile.expForNextLevel} · Gear: ${equippedRelic.name}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
 
-                    items(JungleLoreCatalog.biomes, key = { it.id }) { biome ->
-                        val creature = JungleLoreCatalog.creatureById(biome.creatureId)
-                        val progress = uiState.creatureProgress[biome.creatureId]
-                        val isUnlocked = profile.nectar >= biome.unlockNectar || (progress?.discovered == true)
-                        val isQuestDone = biome.id in profile.completedQuestIds
-                        val bondLevel = progress?.bondLevel ?: 0
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            RpgStatChip("Magic ${totalMagic + profile.arcanePowerBonus}", StarlightVioletAccent, Modifier.weight(1f))
+                            RpgStatChip("Mana ${profile.mana}/${profile.maxMana}", DewTealAccent, Modifier.weight(1f))
+                            RpgStatChip("Town ${profile.communityProsperity}%", FernEmeraldAccent, Modifier.weight(1f))
+                        }
 
-                        BiomeTrailCard(
-                            biome = biome,
-                            creatureName = creature.name,
-                            isUnlocked = isUnlocked,
-                            isQuestDone = isQuestDone,
-                            bondLevel = bondLevel,
-                            currentNectar = profile.nectar,
-                            onClick = { if (isUnlocked) onOpenBiome(biome) }
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            FilledTonalButton(
+                                onClick = { showHeroRoster = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_hero_roster_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Groups,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Heroes & Allies")
+                            }
+                            OutlinedButton(
+                                onClick = { showRelicForge = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_relic_forge_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Build,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Magitech Gear")
+                            }
+                        }
+
+                        Button(
+                            onClick = onOpenMissions,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("grove_open_missions_button")
+                        ) {
+                            Text(
+                                text = if (profile.canopyRestored) {
+                                    "Community Missions & Wild Patrols (Crown Restored!)"
+                                } else {
+                                    "Go on Community Missions & Wild Battles (${profile.communityProsperity}%)"
+                                }
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CloudDone,
+                                contentDescription = "Cloud synced",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = userEmail?.takeIf { it.isNotBlank() }?.let { "Cloud Sync · $it" }
+                                    ?: "Cloud Sanctuary Synced",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalButton(
+                                onClick = onToggleAudioMute,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("grove_audio_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = if (isAudioMuted) {
+                                        Icons.AutoMirrored.Rounded.VolumeOff
+                                    } else {
+                                        Icons.Rounded.MusicNote
+                                    },
+                                    contentDescription = stringResource(R.string.cd_toggle_audio),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(
+                                        if (isAudioMuted) R.string.audio_muted else R.string.audio_rpg_music_on
+                                    ),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+
+                            TextButton(
+                                onClick = { showSignOutDialog = true },
+                                modifier = Modifier.testTag("sign_out_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.Logout,
+                                    contentDescription = "Sign out",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Sign Out")
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onReplayIntro,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("replay_intro_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.intro_replay_cta))
+                        }
                     }
                 }
+            }
+
+            item {
+                // Active RPG Quest Tracker Card
+                val questBiomeUnlocked = profile.nectar >= nextQuestBiome.unlockNectar
+                val allQuestsDone = JungleLoreCatalog.biomes.all { it.id in profile.completedQuestIds }
+
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f),
+                    border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(FireflyGoldAccent.copy(alpha = 0.22f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (allQuestsDone) "All Canopy Quests Awakened!" else nextQuestBiome.questTitle,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                val goalMsg = when {
+                                    allQuestsDone -> "Every grove shines! Keep mastering all 7 mini-puzzles & welcoming allies."
+                                    questBiomeUnlocked -> nextQuestBiome.questObjective
+                                    nextLockedBiome != null -> {
+                                        val remaining = (nextLockedBiome.unlockNectar - profile.nectar).coerceAtLeast(1)
+                                        "Earn $remaining more Sunbeam Nectar from mini-puzzles to unlock ${nextLockedBiome.name}."
+                                    }
+                                    else -> nextQuestBiome.questObjective
+                                }
+                                Text(
+                                    text = goalMsg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (questBiomeUnlocked) {
+                                Button(
+                                    onClick = { onOpenBiome(nextQuestBiome) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("continue_quest_button")
+                                ) {
+                                    Text("Enter Quest")
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { onLaunchPuzzle(nextQuestBiome.signaturePuzzle) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("quest_quick_puzzle_button")
+                            ) {
+                                Text("Play ${nextQuestBiome.signaturePuzzle.title}")
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    questLogInitialTab = 0
+                                    showQuestLog = true
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_quest_log_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Quest Log (${profile.completedQuestIds.size}/${JungleLoreCatalog.biomes.size})")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    questLogInitialTab = 2
+                                    showQuestLog = true
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("open_lore_log_button")
+                            ) {
+                                Text("Discovered Lore")
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = "Mythical Jungle Chapters",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            items(JungleLoreCatalog.biomes, key = { it.id }) { biome ->
+                val creature = JungleLoreCatalog.creatureById(biome.creatureId)
+                val progress = uiState.creatureProgress[biome.creatureId]
+                val isUnlocked = profile.nectar >= biome.unlockNectar || (progress?.discovered == true)
+                val isQuestDone = biome.id in profile.completedQuestIds
+                val bondLevel = progress?.bondLevel ?: 0
+
+                BiomeTrailCard(
+                    biome = biome,
+                    creatureName = creature.name,
+                    isUnlocked = isUnlocked,
+                    isQuestDone = isQuestDone,
+                    bondLevel = bondLevel,
+                    currentNectar = profile.nectar,
+                    onClick = { if (isUnlocked) onOpenBiome(biome) }
+                )
+            }
+        }
             }
         }
     }

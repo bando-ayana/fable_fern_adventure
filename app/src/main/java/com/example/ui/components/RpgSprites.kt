@@ -338,6 +338,27 @@ fun DrawScope.drawWorldCreatureSprite(
     }
 
     when {
+        id.contains("mossback") || id.contains("sproutling") -> {
+            // Feisty emerald-moss training cub with coral leaf spikes
+            drawOval(
+                color = Color(0xFF317A4A),
+                topLeft = Offset(cx - spriteSize * 0.28f, cy - spriteSize * 0.14f),
+                size = Size(spriteSize * 0.56f, spriteSize * 0.40f)
+            )
+            // Sprouting leaf ears/spikes
+            val crown = Path().apply {
+                moveTo(cx - spriteSize * 0.10f, cy - spriteSize * 0.12f)
+                lineTo(cx, cy - spriteSize * 0.36f)
+                lineTo(cx + spriteSize * 0.10f, cy - spriteSize * 0.12f)
+                close()
+            }
+            drawPath(crown, color = FireflyGoldAccent)
+            drawCircle(OrchidCoralAccent, radius = spriteSize * 0.06f, center = Offset(cx - spriteSize * 0.18f, cy - spriteSize * 0.14f))
+            drawCircle(OrchidCoralAccent, radius = spriteSize * 0.06f, center = Offset(cx + spriteSize * 0.18f, cy - spriteSize * 0.14f))
+            drawCircle(Color(0xFFFFEC7A), radius = spriteSize * 0.048f, center = Offset(cx - spriteSize * 0.09f, cy + spriteSize * 0.01f))
+            drawCircle(Color(0xFFFFEC7A), radius = spriteSize * 0.048f, center = Offset(cx + spriteSize * 0.09f, cy + spriteSize * 0.01f))
+        }
+
         id.contains("thornscale") || id.contains("briar") -> {
             // Armored jagged jungle prowler
             drawOval(

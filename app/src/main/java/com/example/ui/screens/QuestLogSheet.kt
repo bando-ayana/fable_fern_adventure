@@ -20,8 +20,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.TaskAlt
@@ -54,6 +55,7 @@ import com.example.data.JungleLoreCatalog
 import com.example.model.BiomeNode
 import com.example.model.LoreCategory
 import com.example.model.PuzzleType
+import com.example.rpg.DailyStreakTracker
 import com.example.stateHolder.FernfableUiState
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
@@ -126,7 +128,7 @@ fun QuestLogSheet(
                             style = MaterialTheme.typography.headlineSmall
                         )
                         Text(
-                            text = "${completedBiomes.size}/${JungleLoreCatalog.biomes.size} Chapters · $discoveredLoreCount/${JungleLoreCatalog.loreEntries.size} Lore",
+                            text = "${completedBiomes.size}/${JungleLoreCatalog.biomes.size} Chapters · ${profile.dailyStreak}-Day Streak · $discoveredLoreCount/${JungleLoreCatalog.loreEntries.size} Lore",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -212,6 +214,63 @@ private fun ObjectivesTabContent(
 ) {
     val profile = uiState.profile
     val totalChapters = JungleLoreCatalog.biomes.size
+
+    val nextReward = remember(profile.dailyStreak) {
+        DailyStreakTracker.previewNextDayBonus(profile.dailyStreak)
+    }
+
+    // Daily Activity Streak card
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = FireflyGoldAccent.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.45f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("quest_log_daily_streak_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.LocalFireDepartment,
+                        contentDescription = "Daily activity streak",
+                        tint = FireflyGoldAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "${profile.dailyStreak}-Day Activity Streak",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("quest_log_streak_count")
+                    )
+                }
+                QuestStatusPill(
+                    text = "Best ${profile.longestDailyStreak}d",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = if (profile.dailyStreak > 0) {
+                    val todayBonus = DailyStreakTracker.rewardForStreakDay(profile.dailyStreak)
+                    "Today's bonus claimed (+${todayBonus.first} EXP, +${todayBonus.second} Mana). Return tomorrow for Day ${nextReward.nextDayStreak}: +${nextReward.bonusHeroExp} Hero EXP & +${nextReward.bonusMana} Mana!"
+                } else {
+                    "Play any quest, mission, or puzzle daily to earn scaling Hero EXP and Mana bonuses!"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 
     // Campaign summary card
     Surface(

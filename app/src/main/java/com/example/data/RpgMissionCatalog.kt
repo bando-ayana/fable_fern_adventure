@@ -10,6 +10,24 @@ object RpgMissionCatalog {
 
     val wildOpponents: List<WildEncounterOpponent> = listOf(
         WildEncounterOpponent(
+            id = "mossback_sproutling",
+            name = "Mossback Sproutling",
+            title = "Prickly Training Cub",
+            temperament = WildCreatureTemperament.MENACING,
+            habitat = "Elder Nia's Training Glade",
+            description = "A feisty young bramble-cub that likes testing new Solari explorers in Elder Nia's sunlit practice clearing.",
+            maxHp = 32,
+            minAttack = 3,
+            maxAttack = 5,
+            specialMoveName = "Leaf-Spore Nudge",
+            rewardExp = 35,
+            rewardMagic = 10,
+            rewardMana = 12,
+            rewardNectar = 10,
+            rewardMoonstones = 1,
+            guaranteedLoot = LootItemType.SUNBERRY_TONIC
+        ),
+        WildEncounterOpponent(
             id = "thornscale_stalker",
             name = "Thornscale Stalker",
             title = "Briar-Armored Prowler",
@@ -266,11 +284,28 @@ object RpgMissionCatalog {
         )
     )
 
+    val introMission: CommunityMission = CommunityMission(
+        id = "mission_intro_sparring",
+        orderIndex = -1,
+        title = "Training Clearing: Mossback Sproutling",
+        communityProject = "Explorer Readiness Trial",
+        communityBenefit = "Certifies your canopy survival skills & awards starter XP, Magic, Mana & Loot.",
+        summary = "Practice combat & creature soothing! Try Solar Strike, Arcane Pulse, or Soothe once its HP drops below 45%.",
+        communityActionLabel = "Step Into the Practice Ring",
+        communityActionOutcome = "Elder Nia cheers from the boardwalk as a prickly Mossback Sproutling bounds onto the moss!",
+        recommendedLevel = 1,
+        prosperityReward = 0,
+        requiredProsperity = 0,
+        opponent = opponentById("mossback_sproutling"),
+        puzzleChallenge = PuzzleType.FIREFLY_ECHO,
+        isWildPatrol = true
+    )
+
     fun opponentById(id: String): WildEncounterOpponent =
         wildOpponents.firstOrNull { it.id == id } ?: wildOpponents.first()
 
     fun missionById(id: String): CommunityMission? =
-        (communityMissions + wildPatrols).firstOrNull { it.id == id }
+        (listOf(introMission) + communityMissions + wildPatrols).firstOrNull { it.id == id }
 
     fun parseLootBag(csv: String): Map<LootItemType, Int> {
         if (csv.isBlank()) return emptyMap()

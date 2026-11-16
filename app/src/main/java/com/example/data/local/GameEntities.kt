@@ -34,6 +34,7 @@ data class PlayerProfileEntity(
     val dailyStreak: Int = 0,
     val longestDailyStreak: Int = 0,
     val lastActivityEpochDay: Long = -1L,
+    val introCompleted: Boolean = false
 ) {
     val totalXp: Int
         get() = memoryXp + logicXp + spatialXp + deductionXp + observationXp

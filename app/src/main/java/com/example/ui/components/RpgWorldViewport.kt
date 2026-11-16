@@ -454,7 +454,7 @@ fun RpgWorldViewport(
                                 nearestTarget.interactable?.kind == InteractableKind.PUZZLE_PEDESTAL -> Icons.Rounded.Extension
                                 nearestTarget.interactable?.kind == InteractableKind.MANA_FOUNTAIN -> Icons.Rounded.Spa
                                 nearestTarget.interactable?.kind == InteractableKind.HARVEST_NECTAR ||
-                                        nearestTarget.interactable?.kind == InteractableKind.HARVEST_TONIC -> Icons.Rounded.LocalFlorist
+                                    nearestTarget.interactable?.kind == InteractableKind.HARVEST_TONIC -> Icons.Rounded.LocalFlorist
                                 else -> Icons.Rounded.AutoAwesome
                             },
                             contentDescription = null,
@@ -486,7 +486,7 @@ fun RpgWorldViewport(
 }
 
 @Composable
-private fun VirtualAnalogStick(
+internal fun VirtualAnalogStick(
     onVectorChanged: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -606,7 +606,7 @@ private fun WorldMinimap(
     }
 }
 
-private fun DrawScope.drawWorldTile(
+internal fun DrawScope.drawWorldTile(
     tile: WorldTile,
     tx: Int,
     ty: Int,
@@ -778,7 +778,7 @@ private fun DrawScope.drawWorldTile(
     }
 }
 
-private fun DrawScope.drawInteractableObject(
+internal fun DrawScope.drawInteractableObject(
     obj: WorldInteractable,
     center: Offset,
     tilePx: Float,

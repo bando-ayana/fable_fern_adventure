@@ -86,11 +86,9 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                     }
                 }
             )
-
             FernfableApp(
                 viewModel = viewModel,
-                userEmail = user.email
-                        ?: if (BuildConfig.DEBUG && user.isAnonymous) "tester@example.com" else null,
+                userEmail = user.email,
                 onSignOut = {
                     scope.launch {
                         withContext(NonCancellable) {

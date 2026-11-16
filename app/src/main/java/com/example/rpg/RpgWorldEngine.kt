@@ -2,7 +2,10 @@ package com.example.rpg
 
 import com.example.data.JungleLoreCatalog
 import com.example.data.RpgMissionCatalog
+import com.example.model.LootItemType
 import com.example.model.PuzzleType
+import com.example.model.WildCreatureTemperament
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -702,15 +705,15 @@ object RpgWorldEngine {
             val distToHero = hypot(nextX - actor.x, nextY - actor.y)
             val mission = actor.missionId?.let { RpgMissionCatalog.missionById(it) }
             val missionUnlocked = mission == null ||
-                    mission.isWildPatrol ||
-                    communityProsperity >= mission.requiredProsperity
+                mission.isWildPatrol ||
+                communityProsperity >= mission.requiredProsperity
             val alreadyCleared = actor.missionId != null && actor.missionId in completedMissions
 
             val chasing = actor.isWildEnemy &&
-                    missionUnlocked &&
-                    !alreadyCleared &&
-                    cooldown <= 0f &&
-                    distToHero <= CREATURE_AGGRO_RADIUS
+                missionUnlocked &&
+                !alreadyCleared &&
+                cooldown <= 0f &&
+                distToHero <= CREATURE_AGGRO_RADIUS
 
             var targetX: Float
             var targetY: Float
