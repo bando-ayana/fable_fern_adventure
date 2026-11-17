@@ -24,12 +24,15 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 class GameRepository(private val db: FirebaseFirestore) {
+    var requestManualRetry: (suspend (operation: String, error: String) -> Boolean)? = null
 
     constructor(context: Context) : this(
         FirebaseFirestore.getInstance(
@@ -156,15 +159,24 @@ class GameRepository(private val db: FirebaseFirestore) {
             val defaults = PlayerProfileEntity()
             val migrationPatch = mutableMapOf<String, Any>()
             if (!profileSnap.contains("mana")) migrationPatch["mana"] = defaults.mana
-            if (!profileSnap.contains("magicEssence")) migrationPatch["magicEssence"] = defaults.magicEssence
-            if (!profileSnap.contains("communityProsperity")) migrationPatch["communityProsperity"] = defaults.communityProsperity
-            if (!profileSnap.contains("completedMissionsCsv")) migrationPatch["completedMissionsCsv"] = defaults.completedMissionsCsv
-            if (!profileSnap.contains("lootBagCsv")) migrationPatch["lootBagCsv"] = defaults.lootBagCsv
-            if (!profileSnap.contains("canopyRestored")) migrationPatch["canopyRestored"] = defaults.canopyRestored
-            if (!profileSnap.contains("dailyStreak")) migrationPatch["dailyStreak"] = defaults.dailyStreak
-            if (!profileSnap.contains("longestDailyStreak")) migrationPatch["longestDailyStreak"] = defaults.longestDailyStreak
-            if (!profileSnap.contains("lastActivityEpochDay")) migrationPatch["lastActivityEpochDay"] = defaults.lastActivityEpochDay
-            if (!profileSnap.contains("introCompleted")) migrationPatch["introCompleted"] = defaults.introCompleted
+            if (!profileSnap.contains("magicEssence")) migrationPatch["magicEssence"] =
+                defaults.magicEssence
+            if (!profileSnap.contains("communityProsperity")) migrationPatch["communityProsperity"] =
+                defaults.communityProsperity
+            if (!profileSnap.contains("completedMissionsCsv")) migrationPatch["completedMissionsCsv"] =
+                defaults.completedMissionsCsv
+            if (!profileSnap.contains("lootBagCsv")) migrationPatch["lootBagCsv"] =
+                defaults.lootBagCsv
+            if (!profileSnap.contains("canopyRestored")) migrationPatch["canopyRestored"] =
+                defaults.canopyRestored
+            if (!profileSnap.contains("dailyStreak")) migrationPatch["dailyStreak"] =
+                defaults.dailyStreak
+            if (!profileSnap.contains("longestDailyStreak")) migrationPatch["longestDailyStreak"] =
+                defaults.longestDailyStreak
+            if (!profileSnap.contains("lastActivityEpochDay")) migrationPatch["lastActivityEpochDay"] =
+                defaults.lastActivityEpochDay
+            if (!profileSnap.contains("introCompleted")) migrationPatch["introCompleted"] =
+                defaults.introCompleted
             migrationPatch["updatedAt"] = FieldValue.serverTimestamp()
             batch.update(profileRef, migrationPatch)
             hasWrites = true
@@ -290,18 +302,17 @@ class GameRepository(private val db: FirebaseFirestore) {
         val existing = getPuzzleStatsOnce(userId, puzzleType.id)
         if (existing?.accessed == true) return
         val statsRef = puzzleStatsCollection(userId).document(puzzleType.id)
-        try {
+
+        awaitWithRetry(
+            operation = "Puzzle accessed",
+            path = statsRef.path
+        ) {
             statsRef.update(
                 mapOf(
                     "accessed" to true,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, statsRef.path)
-            throw e
         }
     }
 
@@ -358,13 +369,19 @@ class GameRepository(private val db: FirebaseFirestore) {
         val existingStats = getPuzzleStatsOnce(userId, puzzleType.id)
             ?: PuzzleStatsEntity(puzzleType = puzzleType.id)
 
-        val nectarEarned = ((puzzleType.baseNectarReward + levelPlayed * 2) * difficulty.rewardMultiplier).roundToInt() +
-            hero.bonusNectarPerPuzzle + relic.bonusNectar
+        val nectarEarned =
+            ((puzzleType.baseNectarReward + levelPlayed * 2) * difficulty.rewardMultiplier).roundToInt() +
+                    hero.bonusNectarPerPuzzle + relic.bonusNectar
         val moonstonesEarned = if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
-        val skillXpEarned = difficulty.xpBonus + starsEarned * 5 + (rawScore / 25).coerceAtMost(20) +
-            hero.bonusSkillXp
+        val skillXpEarned =
+            difficulty.xpBonus + starsEarned * 5 + (rawScore / 25).coerceAtMost(20) +
+                    hero.bonusSkillXp
         val heroExpGain = 35 + starsEarned * 10
-        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, heroExpGain)
+        val (newLevel, newExp) = applyHeroExp(
+            currentProfile.heroLevel,
+            currentProfile.heroExp,
+            heroExpGain
+        )
         val newStreak = currentProfile.currentStreak + 1
         val updatedBestStreak = maxOf(currentProfile.bestStreak, newStreak)
         val totalNectarAfter = currentProfile.nectar + nectarEarned
@@ -390,7 +407,10 @@ class GameRepository(private val db: FirebaseFirestore) {
         val nextLevel = maxOf(existingStats.currentLevel, levelPlayed + 1)
         val isNewBest = rawScore > existingStats.bestScore
         val statsRef = puzzleStatsCollection(userId).document(puzzleType.id)
-        try {
+        awaitWithRetry(
+            operation = "Save puzzle completion",
+            path = statsRef.path
+        ) {
             statsRef.update(
                 mapOf(
                     "accessed" to true,
@@ -404,11 +424,6 @@ class GameRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, statsRef.path)
-            throw e
         }
 
         unlockBiomesForNectar(userId, totalNectarAfter)
@@ -443,7 +458,11 @@ class GameRepository(private val db: FirebaseFirestore) {
         val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
         val hero = JungleLoreCatalog.heroById(currentProfile.selectedHeroId)
         val newNectar = currentProfile.nectar + rewardNectar
-        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, rewardExp)
+        val (newLevel, newExp) = applyHeroExp(
+            currentProfile.heroLevel,
+            currentProfile.heroExp,
+            rewardExp
+        )
         val updatedQuests = (currentProfile.completedQuestIds + biomeId).joinToString(",")
 
         updateProfileFields(
@@ -503,7 +522,8 @@ class GameRepository(private val db: FirebaseFirestore) {
 
         var updatedLootCsv = currentProfile.lootBagCsv
         usedLootInBattle.forEach { (item, qty) ->
-            updatedLootCsv = RpgMissionCatalog.consumeLoot(updatedLootCsv, item, qty) ?: updatedLootCsv
+            updatedLootCsv =
+                RpgMissionCatalog.consumeLoot(updatedLootCsv, item, qty) ?: updatedLootCsv
         }
 
         if (!victory) {
@@ -553,9 +573,14 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
         updatedLootCsv = RpgMissionCatalog.addLoot(updatedLootCsv, earnedLoot)
 
-        val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, expGained)
+        val (newLevel, newExp) = applyHeroExp(
+            currentProfile.heroLevel,
+            currentProfile.heroExp,
+            expGained
+        )
         val leveledUpTo = if (newLevel > currentProfile.heroLevel) newLevel else null
-        val newProsperity = (currentProfile.communityProsperity + prosperityGained).coerceAtMost(100)
+        val newProsperity =
+            (currentProfile.communityProsperity + prosperityGained).coerceAtMost(100)
         val newMissionsCsv = (currentProfile.completedMissionIds + mission.id).joinToString(",")
         val newNectar = currentProfile.nectar + nectarGained
         val gameBeatenNow = mission.isFinalExpedition && !currentProfile.canopyRestored
@@ -682,16 +707,49 @@ class GameRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    private suspend fun <T> awaitWithRetry(
+        operation: String,
+        path: String,
+        request: suspend () -> T
+    ): T {
+        var automaticRetries = 0
+
+        while (true) {
+            try {
+                return request()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (automaticRetries < 3) {
+                    automaticRetries++
+                    delay((500L * automaticRetries).milliseconds)
+                    continue
+                }
+
+                val retry = requestManualRetry?.invoke(
+                    operation,
+                    e.localizedMessage ?: e.javaClass.simpleName
+                ) ?: false
+
+                if (!retry) {
+                    handleFirestoreError(e, OperationType.WRITE, path)
+                    throw CancellationException("Player chose not to retry $operation")
+                }
+
+                automaticRetries = 0
+            }
+        }
+    }
+
     private suspend fun updateProfileFields(userId: String, fields: Map<String, Any>) {
         val ref = userDocRef(userId)
-        try {
+        awaitWithRetry(
+            operation = "Update user profile",
+            path = ref.path
+        ) {
             ref.update(fields + ("updatedAt" to FieldValue.serverTimestamp())).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, ref.path)
-            throw e
         }
+
     }
 
     private fun applyHeroExp(level: Int, currentExp: Int, gained: Int): Pair<Int, Int> {
@@ -719,20 +777,23 @@ class GameRepository(private val db: FirebaseFirestore) {
             newXp >= 50 -> 2
             else -> maxOf(1, current?.bondLevel ?: 1)
         }
-        try {
-            if (current == null) {
-                ref.set(
-                    FirestoreCreatureProgress.newCreateMap(
-                        userId = userId,
-                        creatureId = creatureId,
-                        discovered = true,
-                        bondLevel = newLevel,
-                        bondXp = newXp,
-                        treatsFed = if (incrementTreats) 1 else 0,
-                        lastInteractionMillis = System.currentTimeMillis()
-                    )
-                ).await()
-            } else {
+        if (current == null) {
+            ref.set(
+                FirestoreCreatureProgress.newCreateMap(
+                    userId = userId,
+                    creatureId = creatureId,
+                    discovered = true,
+                    bondLevel = newLevel,
+                    bondXp = newXp,
+                    treatsFed = if (incrementTreats) 1 else 0,
+                    lastInteractionMillis = System.currentTimeMillis()
+                )
+            ).await()
+        } else {
+            awaitWithRetry(
+                operation = "Bond creature with user",
+                path = ref.path
+            ) {
                 ref.update(
                     mapOf(
                         "discovered" to true,
@@ -744,11 +805,6 @@ class GameRepository(private val db: FirebaseFirestore) {
                     )
                 ).await()
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, ref.path)
-            throw e
         }
     }
 
@@ -757,18 +813,21 @@ class GameRepository(private val db: FirebaseFirestore) {
             if (totalNectar >= biome.unlockNectar) {
                 val existing = getCreatureOnce(userId, biome.creatureId)
                 val ref = creaturesCollection(userId).document(biome.creatureId)
-                try {
-                    if (existing == null) {
-                        ref.set(
-                            FirestoreCreatureProgress.newCreateMap(
-                                userId = userId,
-                                creatureId = biome.creatureId,
-                                discovered = true,
-                                bondLevel = 1,
-                                bondXp = 0
-                            )
-                        ).await()
-                    } else if (!existing.discovered) {
+                if (existing == null) {
+                    ref.set(
+                        FirestoreCreatureProgress.newCreateMap(
+                            userId = userId,
+                            creatureId = biome.creatureId,
+                            discovered = true,
+                            bondLevel = 1,
+                            bondXp = 0
+                        )
+                    ).await()
+                } else if (!existing.discovered) {
+                    awaitWithRetry(
+                        operation = "Biomes discovered and unlocked",
+                        path = ref.path
+                    ) {
                         ref.update(
                             mapOf(
                                 "discovered" to true,
@@ -777,11 +836,6 @@ class GameRepository(private val db: FirebaseFirestore) {
                             )
                         ).await()
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    handleFirestoreError(e, OperationType.WRITE, ref.path)
-                    throw e
                 }
             }
         }

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -259,6 +261,8 @@ fun JungleAtmosphereBackground(
     val introState by viewModel.introState.collectAsStateWithLifecycle()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val useRail = screenWidthDp >= 600
+    val pendingDatabaseRetry by
+    viewModel.pendingDatabaseRetry.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -505,6 +509,32 @@ fun JungleAtmosphereBackground(
                 }
             }
         }
+    }
+
+    pendingDatabaseRetry?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelPendingDatabaseRetry,
+            title = {
+                Text("Couldn’t save to the cloud")
+            },
+            text = {
+                Text(
+                    "${prompt.operation} failed.\n\n" +
+                            "${prompt.error}\n\n" +
+                            "Retry the save, or choose Don’t save to cancel it."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::retryPendingDatabaseOperation) {
+                    Text("Retry")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelPendingDatabaseRetry) {
+                    Text("Don’t save")
+                }
+            }
+        )
     }
 
     val currentBattle = activeBattle

@@ -45,6 +45,7 @@ import com.example.stateHolder.FernfableUiState
 import com.example.stateHolder.FireflyEchoUiState
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,6 +56,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration.Companion.milliseconds
 
 class FernfableViewModel(
@@ -63,7 +66,12 @@ class FernfableViewModel(
     private val userDisplayName: String? = null,
     private val userEmail: String? = null
 ) : ViewModel() {
+    private val _pendingDatabaseRetry = MutableStateFlow<DatabaseRetryPrompt?>(null)
+    val pendingDatabaseRetry: StateFlow<DatabaseRetryPrompt?> =
+        _pendingDatabaseRetry.asStateFlow()
 
+    private val retryPromptMutex = Mutex()
+    private var retryDecision: CompletableDeferred<Boolean>? = null
     private val _selectedDifficulty = MutableStateFlow(DifficultyTier.SPROUT)
     private val _snackbarMessage = MutableStateFlow<String?>(null)
 
@@ -169,6 +177,8 @@ class FernfableViewModel(
     private var playbackJob: kotlinx.coroutines.Job? = null
 
     init {
+        repository.requestManualRetry = ::requestDatabaseRetry
+
         viewModelScope.launch {
             try {
                 repository.ensureSeeded(currentUserId, userDisplayName, userEmail)
@@ -1143,6 +1153,30 @@ class FernfableViewModel(
         }
     }
 
+    private suspend fun requestDatabaseRetry(
+        operation: String,
+        error: String
+    ): Boolean = retryPromptMutex.withLock {
+        val decision = CompletableDeferred<Boolean>()
+        retryDecision = decision
+        _pendingDatabaseRetry.value = DatabaseRetryPrompt(operation, error)
+
+        try {
+            decision.await()
+        } finally {
+            retryDecision = null
+            _pendingDatabaseRetry.value = null
+        }
+    }
+
+    fun retryPendingDatabaseOperation() {
+        retryDecision?.complete(true)
+    }
+
+    fun cancelPendingDatabaseRetry() {
+        retryDecision?.complete(false)
+    }
+
     private fun finalizeMissionBattle(finalState: RpgBattleState) {
         viewModelScope.launch {
             runRepositoryAction {
@@ -1184,6 +1218,11 @@ class FernfableViewModel(
     companion object {
         private const val TAG = "FernfableVM"
     }
+
+    data class DatabaseRetryPrompt(
+        val operation: String,
+        val error: String
+    )
 
     class Factory(
         private val repository: GameRepository,
