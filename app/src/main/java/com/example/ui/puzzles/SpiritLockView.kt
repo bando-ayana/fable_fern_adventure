@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Backspace
+import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -33,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.puzzle.SpiritLockPuzzle
 import com.example.puzzle.SpiritRune
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.FireflyGoldAccent
 
 @Composable
@@ -59,7 +61,10 @@ fun SpiritLockView(
         // Legend for Gold & Silver deduction pips
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.speakOnTouch(
+                "Gold dot means exact spot. Teal dot means right rune, wrong spot."
+            )
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -112,7 +117,11 @@ fun SpiritLockView(
                 } else {
                     puzzle.attempts.forEachIndexed { idx, record ->
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .speakOnTouch(
+                                    "Attempt #${idx + 1}: ${record.exactMatches} exact, ${record.misplacedMatches} misplaced"
+                                ),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -217,7 +226,11 @@ fun SpiritLockView(
                                 1.5.dp,
                                 if (isHintOnly) FireflyGoldAccent else MaterialTheme.colorScheme.outlineVariant
                             ),
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier
+                                .size(48.dp)
+                                .speakOnTouch(
+                                    "Slot ${slot + 1}: ${visual?.label ?: "empty"}${if (isHintOnly) ", hint" else ""}"
+                                )
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 AnimatedContent(
@@ -254,17 +267,23 @@ fun SpiritLockView(
                     IconButton(
                         onClick = onRemoveLast,
                         enabled = puzzle.currentDraft.isNotEmpty(),
-                        modifier = Modifier.testTag("spirit_backspace_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Remove last rune")
+                            .testTag("spirit_backspace_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Backspace,
+                            imageVector = Icons.AutoMirrored.Rounded.Backspace,
                             contentDescription = "Remove last rune"
                         )
                     }
                     Button(
                         onClick = onSubmitDraft,
                         enabled = puzzle.currentDraft.size == puzzle.secretCode.size,
-                        modifier = Modifier.testTag("spirit_submit_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Test rune combination")
+                            .testTag("spirit_submit_button")
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
@@ -295,6 +314,8 @@ fun SpiritLockView(
                     modifier = Modifier
                         .weight(1f)
                         .height(62.dp)
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Pick ${visual.label}")
                         .testTag("spirit_rune_${rune.name.lowercase()}")
                         .clickable(
                             enabled = puzzle.currentDraft.size < puzzle.secretCode.size

@@ -33,8 +33,9 @@ fun JungleAtmosphereBackground(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val calmMode = LocalAccessibilityUi.current.calmMode
     val bgTop = MaterialTheme.colorScheme.background
-    val bgTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+    val bgTint = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (calmMode) 0.12f else 0.25f)
     val glowColor = FireflyGoldAccent
 
     val seeds = remember {
@@ -48,16 +49,21 @@ fun JungleAtmosphereBackground(
         )
     }
 
-    val infinite = rememberInfiniteTransition(label = "fireflies")
-    val phase by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 7000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "firefly_phase"
-    )
+    val phase = if (calmMode) {
+        0f
+    } else {
+        val infinite = rememberInfiniteTransition(label = "fireflies")
+        val animated by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = (2f * PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 7000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "firefly_phase"
+        )
+        animated
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -66,24 +72,26 @@ fun JungleAtmosphereBackground(
                     colors = listOf(bgTop, bgTop, bgTint)
                 )
             )
-            seeds.forEach { seed ->
-                val driftY = sin(phase * seed.speed + seed.phase) * 14f
-                val driftX = sin(phase * 0.7f + seed.phase) * 10f
-                val pulseAlpha = 0.20f + 0.22f * ((sin(phase * 1.4f + seed.phase) + 1f) * 0.5f)
-                val center = Offset(
-                    x = size.width * seed.xFraction + driftX,
-                    y = size.height * seed.yFraction + driftY
-                )
-                drawCircle(
-                    color = glowColor.copy(alpha = pulseAlpha * 0.35f),
-                    radius = seed.radiusDp * 5.2f,
-                    center = center
-                )
-                drawCircle(
-                    color = glowColor.copy(alpha = pulseAlpha),
-                    radius = seed.radiusDp * 1.6f,
-                    center = center
-                )
+            if (!calmMode) {
+                seeds.forEach { seed ->
+                    val driftY = sin(phase * seed.speed + seed.phase) * 14f
+                    val driftX = sin(phase * 0.7f + seed.phase) * 10f
+                    val pulseAlpha = 0.20f + 0.22f * ((sin(phase * 1.4f + seed.phase) + 1f) * 0.5f)
+                    val center = Offset(
+                        x = size.width * seed.xFraction + driftX,
+                        y = size.height * seed.yFraction + driftY
+                    )
+                    drawCircle(
+                        color = glowColor.copy(alpha = pulseAlpha * 0.35f),
+                        radius = seed.radiusDp * 5.2f,
+                        center = center
+                    )
+                    drawCircle(
+                        color = glowColor.copy(alpha = pulseAlpha),
+                        radius = seed.radiusDp * 1.6f,
+                        center = center
+                    )
+                }
             }
         }
         content()

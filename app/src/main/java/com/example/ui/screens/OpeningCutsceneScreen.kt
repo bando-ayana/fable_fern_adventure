@@ -70,8 +70,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.rpg.FacingDirection
+import com.example.ui.components.LocalAccessibilityUi
 import com.example.ui.components.drawWorldCreatureSprite
 import com.example.ui.components.drawWorldHeroSprite
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -128,33 +130,43 @@ fun OpeningCutsceneScreen(
 ) {
     val safePage = page.coerceIn(0, cutsceneChapters.lastIndex)
     val chapter = cutsceneChapters[safePage]
+    val calmMode = LocalAccessibilityUi.current.calmMode
 
     BackHandler(enabled = safePage > 0) {
         onPageChange(safePage - 1)
     }
 
-    val infinite = rememberInfiniteTransition(label = "cutscene_ambient")
-    val phase by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(3600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "cutscene_phase"
-    )
+    val phase = if (calmMode) {
+        0f
+    } else {
+        val infinite = rememberInfiniteTransition(label = "cutscene_ambient")
+        val animated by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = (2f * PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(3600, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "cutscene_phase"
+        )
+        animated
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0B1C14),
-                        Color(0xFF132D20),
-                        Color(0xFF0C1A13)
+                if (calmMode) {
+                    Brush.verticalGradient(listOf(Color(0xFF10251B), Color(0xFF10251B)))
+                } else {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF0B1C14),
+                            Color(0xFF132D20),
+                            Color(0xFF0C1A13)
+                        )
                     )
-                )
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -162,7 +174,7 @@ fun OpeningCutsceneScreen(
             modifier = Modifier
                 .widthIn(max = 680.dp)
                 .fillMaxSize()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
+                .padding(horizontal = 18.dp, vertical = if (calmMode) 16.dp else 14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Top controls bar: Audio + Skip Intro
@@ -201,6 +213,7 @@ fun OpeningCutsceneScreen(
                         onClick = onToggleAudioMute,
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
+                            .speakOnTouch(if (isAudioMuted) "Audio muted button. Tap to unmute music." else "Music playing button. Tap to mute music.")
                             .testTag("cutscene_audio_toggle")
                     ) {
                         Icon(
@@ -217,6 +230,7 @@ fun OpeningCutsceneScreen(
                         onClick = onSkipIntro,
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
+                            .speakOnTouch("Skip intro button. Jump straight into the main world.")
                             .testTag("cutscene_skip_button")
                     ) {
                         Text(
@@ -236,24 +250,28 @@ fun OpeningCutsceneScreen(
                     .padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                AnimatedContent(
-                    targetState = safePage,
-                    transitionSpec = { fadeIn(tween(340)) togetherWith fadeOut(tween(240)) },
-                    label = "cutscene_stage"
-                ) { targetPage ->
-                    CutsceneStageArtwork(
-                        page = targetPage,
-                        heroId = heroId,
-                        phase = phase
-                    )
+                if (!calmMode) {
+                    AnimatedContent(
+                        targetState = safePage,
+                        transitionSpec = { fadeIn(tween(340)) togetherWith fadeOut(tween(240)) },
+                        label = "cutscene_stage"
+                    ) { targetPage ->
+                        CutsceneStageArtwork(
+                            page = targetPage,
+                            heroId = heroId,
+                            phase = phase
+                        )
+                    }
                 }
 
                 Surface(
                     shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    tonalElevation = 4.dp,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.94f),
+                    tonalElevation = if (calmMode) 2.dp else 4.dp,
                     border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("${chapter.title}. ${chapter.narration}. Goal: ${chapter.highlightGoal}")
                 ) {
                     Column(
                         modifier = Modifier.padding(18.dp),
@@ -355,6 +373,7 @@ fun OpeningCutsceneScreen(
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
+                                .speakOnTouch("Back button. Go to previous story page.")
                                 .testTag("cutscene_back_button")
                         ) {
                             Icon(
@@ -367,6 +386,11 @@ fun OpeningCutsceneScreen(
                         }
                     }
 
+                    val nextLabel = if (safePage < cutsceneChapters.lastIndex) {
+                        "Continue Story"
+                    } else {
+                        stringResource(R.string.intro_begin_training)
+                    }
                     Button(
                         onClick = {
                             if (safePage < cutsceneChapters.lastIndex) {
@@ -383,17 +407,14 @@ fun OpeningCutsceneScreen(
                         modifier = Modifier
                             .weight(1f)
                             .minimumInteractiveComponentSize()
+                            .speakOnTouch("$nextLabel button.")
                             .testTag(
                                 if (safePage < cutsceneChapters.lastIndex) "cutscene_next_button"
                                 else "cutscene_start_training_button"
                             )
                     ) {
                         Text(
-                            text = if (safePage < cutsceneChapters.lastIndex) {
-                                "Continue Story"
-                            } else {
-                                stringResource(R.string.intro_begin_training)
-                            },
+                            text = nextLabel,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.width(8.dp))

@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +76,8 @@ import com.example.puzzle.SpiritLockPuzzle
 import com.example.puzzle.SpiritRune
 import com.example.puzzle.VineWeaverBoard
 import com.example.stateHolder.FireflyEchoUiState
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.puzzles.CanopySpotterView
 import com.example.ui.puzzles.FernMosaicView
 import com.example.ui.puzzles.FireflyEchoView
@@ -129,18 +133,26 @@ fun PuzzlePlayScreen(
 ) {
     BackHandler(onBack = onBack)
     var showGuide by remember(puzzleType) { mutableStateOf(level == 1) }
+    val a11y = LocalAccessibilityUi.current
 
     Scaffold(
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    containerColor = MaterialTheme.colorScheme.surface.copy(
+                        alpha = if (a11y.calmMode) 1f else 0.9f
+                    )
                 ),
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.testTag("puzzle_back_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Back to previous screen")
+                            .testTag("puzzle_back_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -149,22 +161,58 @@ fun PuzzlePlayScreen(
                     }
                 },
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier.speakOnTouch(
+                            "${puzzleType.title}, Level $level, ${difficulty.label}, ${puzzleType.skill.displayName}"
+                        )
+                    ) {
                         Text(
                             text = puzzleType.title,
                             style = MaterialTheme.typography.titleLarge
                         )
-                        Text(
-                            text = "Level $level · ${difficulty.label} · ${puzzleType.skill.displayName}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        if (!a11y.calmMode) {
+                            Text(
+                                text = "Level $level · ${difficulty.label} · ${puzzleType.skill.displayName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Text(
+                                text = "Level $level · ${difficulty.label}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 },
                 actions = {
+                    if (a11y.calmMode) {
+                        IconButton(
+                            onClick = onToggleAudioMute,
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .speakOnTouch(
+                                    if (isAudioMuted) "Jungle sound is muted. Tap to turn on."
+                                    else "Jungle sound is on. Tap to mute."
+                                )
+                                .testTag("puzzle_audio_toggle")
+                        ) {
+                            Icon(
+                                imageVector = if (isAudioMuted) {
+                                    Icons.AutoMirrored.Rounded.VolumeOff
+                                } else {
+                                    Icons.AutoMirrored.Rounded.VolumeUp
+                                },
+                                contentDescription = stringResource(R.string.cd_toggle_audio)
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { showGuide = !showGuide },
-                        modifier = Modifier.testTag("puzzle_guide_toggle")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch(if (showGuide) "Hide how to play guide" else "Show how to play guide")
+                            .testTag("puzzle_guide_toggle")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
@@ -183,7 +231,10 @@ fun PuzzlePlayScreen(
                                 PuzzleType.SPIRIT_LOCK -> onUseSpiritHint()
                             }
                         },
-                        modifier = Modifier.testTag("puzzle_hint_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Get a gentle hint for ${puzzleType.title}")
+                            .testTag("puzzle_hint_button")
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Lightbulb,
@@ -193,7 +244,10 @@ fun PuzzlePlayScreen(
                     }
                     IconButton(
                         onClick = { onRestartLevel(level) },
-                        modifier = Modifier.testTag("puzzle_reset_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Restart level $level")
+                            .testTag("puzzle_reset_button")
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
@@ -219,41 +273,77 @@ fun PuzzlePlayScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = if (isAudioMuted) {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
-                    },
-                    border = BorderStroke(
-                        1.dp,
-                        if (isAudioMuted) {
-                            MaterialTheme.colorScheme.outlineVariant
+                if (!a11y.calmMode) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (isAudioMuted) {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                         } else {
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onToggleAudioMute)
-                        .testTag("puzzle_audio_toggle")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (isAudioMuted) {
+                                MaterialTheme.colorScheme.outlineVariant
+                            } else {
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(50))
+                            .speakOnTouch(
+                                if (isAudioMuted) "Jungle ambience muted. Tap to unmute."
+                                else "Jungle ambience on. Tap to mute."
+                            )
+                            .clickable(onClick = onToggleAudioMute)
+                            .testTag("puzzle_audio_toggle")
                     ) {
                         Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Forest,
+                                    contentDescription = null,
+                                    tint = if (isAudioMuted) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    },
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = stringResource(
+                                        if (isAudioMuted) {
+                                            R.string.audio_muted
+                                        } else {
+                                            R.string.audio_jungle_ambience_on
+                                        }
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isAudioMuted) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    }
+                                )
+                            }
                             Icon(
-                                imageVector = Icons.Rounded.Forest,
-                                contentDescription = null,
+                                imageVector = if (isAudioMuted) {
+                                    Icons.AutoMirrored.Rounded.VolumeOff
+                                } else {
+                                    Icons.AutoMirrored.Rounded.VolumeUp
+                                },
+                                contentDescription = stringResource(R.string.cd_toggle_audio),
                                 tint = if (isAudioMuted) {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 } else {
@@ -261,48 +351,19 @@ fun PuzzlePlayScreen(
                                 },
                                 modifier = Modifier.size(18.dp)
                             )
-                            Text(
-                                text = stringResource(
-                                    if (isAudioMuted) {
-                                        R.string.audio_muted
-                                    } else {
-                                        R.string.audio_jungle_ambience_on
-                                    }
-                                ),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isAudioMuted) {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                } else {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                }
-                            )
                         }
-                        Icon(
-                            imageVector = if (isAudioMuted) {
-                                Icons.AutoMirrored.Rounded.VolumeOff
-                            } else {
-                                Icons.AutoMirrored.Rounded.VolumeUp
-                            },
-                            contentDescription = stringResource(R.string.cd_toggle_audio),
-                            tint = if (isAudioMuted) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.secondary
-                            },
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 }
 
                 AnimatedVisibility(visible = showGuide) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (a11y.calmMode) 0.9f else 0.6f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 14.dp)
+                            .speakOnTouch("How to play ${puzzleType.title}: ${puzzleType.howToPlay}")
                     ) {
                         Text(
                             text = puzzleType.howToPlay,
@@ -440,6 +501,9 @@ private fun PuzzleCelebrationCard(
         border = BorderStroke(2.dp, FireflyGoldAccent),
         modifier = Modifier
             .fillMaxWidth()
+            .speakOnTouch(
+                "Level ${result.completedLevel} cleared with ${result.starsEarned} stars and score ${result.score}. Earned ${result.nectarEarned} Nectar and ${result.moonstonesEarned} Shards."
+            )
             .testTag("puzzle_celebration_card")
     ) {
         Column(
@@ -487,20 +551,28 @@ private fun PuzzleCelebrationCard(
                     onClick = onNextLevel,
                     modifier = Modifier
                         .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Play level ${result.nextLevelUnlocked}")
                         .testTag("celebration_next_level_button")
                 ) {
                     Text("Play Level ${result.nextLevelUnlocked}")
                 }
                 OutlinedButton(
                     onClick = onReturn,
-                    modifier = Modifier.testTag("celebration_return_button")
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Return to sanctuary")
+                        .testTag("celebration_return_button")
                 ) {
                     Text("Sanctuary")
                 }
             }
             androidx.compose.material3.TextButton(
                 onClick = onReplayLevel,
-                modifier = Modifier.testTag("celebration_replay_level_button")
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .speakOnTouch("Replay level ${result.completedLevel} for a higher score")
+                    .testTag("celebration_replay_level_button")
             ) {
                 Text("Replay Level ${result.completedLevel} for Higher Score")
             }

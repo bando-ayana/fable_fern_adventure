@@ -5,7 +5,6 @@ import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Log
 import androidx.annotation.RawRes
-import androidx.core.content.edit
 import com.example.R
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -158,7 +157,7 @@ class FernfableAudioManager(
     fun setMuted(muted: Boolean) {
         if (_isMuted.value == muted) return
         _isMuted.value = muted
-        prefs.edit { putBoolean(KEY_MUTED, muted) }
+        prefs.edit().putBoolean(KEY_MUTED, muted).apply()
         if (muted) {
             transitionJob?.cancel()
             stopAccentLayers()
@@ -412,7 +411,7 @@ class FernfableAudioManager(
         private const val PREFS_NAME = "fernfable_audio_prefs"
         private const val KEY_MUTED = "audio_muted"
         internal const val RPG_TARGET_VOLUME = 0.42f
-        internal const val AMBIENT_TARGET_VOLUME = 0.35f
+        internal const val AMBIENT_TARGET_VOLUME = 0.65f
         private const val CROSSFADE_STEPS = 10
         private const val CROSSFADE_STEP_MS = 45L
         private const val LAYER_FADE_STEPS = 12

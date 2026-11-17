@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -57,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.puzzle.FireflyEchoEngine
 import com.example.stateHolder.FireflyEchoUiState
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -87,16 +90,22 @@ fun FireflyEchoView(
         Icons.Rounded.AutoAwesome
     )
 
-    val ambientTransition = rememberInfiniteTransition(label = "firefly_aura")
-    val shimmerPulse by ambientTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "firefly_shimmer_pulse"
-    )
+    val a11y = LocalAccessibilityUi.current
+    val shimmerPulse = if (a11y.calmMode) {
+        0.4f
+    } else {
+        val ambientTransition = rememberInfiniteTransition(label = "firefly_aura")
+        val animated by ambientTransition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 0.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "firefly_shimmer_pulse"
+        )
+        animated
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -104,8 +113,10 @@ fun FireflyEchoView(
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (a11y.calmMode) 0.92f else 0.7f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .speakOnTouch(state.statusBanner)
         ) {
             AnimatedContent(
                 targetState = state.statusBanner,
@@ -225,6 +236,7 @@ fun FireflyEchoView(
                                         )
                                     }
                                 }
+                                .speakOnTouch("${FireflyEchoEngine.blossomNames[idx]} blossom")
                                 .testTag("firefly_blossom_$idx")
                                 .clickable(enabled = !state.isPlayingSequence) {
                                     onTapBlossom(idx)
@@ -262,7 +274,10 @@ fun FireflyEchoView(
         OutlinedButton(
             onClick = onReplayHint,
             enabled = !state.isPlayingSequence,
-            modifier = Modifier.testTag("firefly_replay_button")
+            modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .speakOnTouch("Replay Glow Whisper sequence")
+                .testTag("firefly_replay_button")
         ) {
             Icon(
                 imageVector = Icons.Rounded.Replay,

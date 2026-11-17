@@ -23,4 +23,8 @@
     <string name="intro_graduate_cta">Enter Solari Canopy (+20 Nectar)</string>
     <string name="intro_glade_badge">Training Glade · Introductory Level</string>
     <string name="intro_replay_cta">Replay Intro &amp; Tutorial</string>
+    <string name="a11y_calm_view">Calm View</string>
+    <string name="a11y_touch_to_speak">Touch to Speak</string>
+    <string name="cd_a11y_calm_view">Toggle simplified calm navigation mode without losing any features</string>
+    <string name="cd_a11y_touch_to_speak">Toggle text to speech when you touch an item on the screen</string>
 </resources>

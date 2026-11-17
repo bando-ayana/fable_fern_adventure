@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import com.example.puzzle.PipeDir
 import com.example.puzzle.VineTile
 import com.example.puzzle.VineWeaverBoard
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FireflyGoldAccent
 import com.example.ui.theme.OrchidCoralAccent
@@ -62,16 +64,22 @@ fun VineWeaverView(
     onRotateTile: (row: Int, col: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val flowTransition = rememberInfiniteTransition(label = "vine_water_shimmer")
-    val waterShimmer by flowTransition.animateFloat(
-        initialValue = 0.65f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(950, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "vine_shimmer_alpha"
-    )
+    val a11y = LocalAccessibilityUi.current
+    val waterShimmer = if (a11y.calmMode) {
+        0.85f
+    } else {
+        val flowTransition = rememberInfiniteTransition(label = "vine_water_shimmer")
+        val animated by flowTransition.animateFloat(
+            initialValue = 0.65f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(950, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "vine_shimmer_alpha"
+        )
+        animated
+    }
     val bloomScale by animateFloatAsState(
         targetValue = if (board.moonflowerBloomed) 1.06f else 1.0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -90,7 +98,8 @@ fun VineWeaverView(
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = DewTealAccent.copy(alpha = 0.16f),
-                border = BorderStroke(1.dp, DewTealAccent.copy(alpha = 0.5f))
+                border = BorderStroke(1.dp, DewTealAccent.copy(alpha = 0.5f)),
+                modifier = Modifier.speakOnTouch("Spring water enters at top-left tile")
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -120,7 +129,12 @@ fun VineWeaverView(
                     1.dp,
                     if (board.moonflowerBloomed) FireflyGoldAccent else MaterialTheme.colorScheme.outlineVariant
                 ),
-                modifier = Modifier.scale(bloomScale)
+                modifier = Modifier
+                    .scale(bloomScale)
+                    .speakOnTouch(
+                        if (board.moonflowerBloomed) "Moonflower at bottom-right is watered and blooming"
+                        else "Connect water to Moonflower at bottom-right"
+                    )
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -175,6 +189,9 @@ fun VineWeaverView(
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f)
+                                    .speakOnTouch(
+                                        "Row ${r + 1} Column ${c + 1}, ${if (tile.isPowered) "watered" else "dry"} vine tile, tap to rotate"
+                                    )
                                     .testTag("vine_tile_${r}_${c}")
                             )
                         }

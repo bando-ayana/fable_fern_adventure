@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,8 @@ import com.example.model.BrainSkill
 import com.example.model.DifficultyTier
 import com.example.model.PuzzleType
 import com.example.stateHolder.FernfableUiState
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -71,6 +74,7 @@ fun PuzzleHubScreen(
     onNavigateToMissions: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val a11y = LocalAccessibilityUi.current
     val accessedPuzzles = PuzzleType.entries.filter { uiState.puzzleStats[it]?.accessed == true }
     val lockedPuzzles = PuzzleType.entries.filter { uiState.puzzleStats[it]?.accessed != true }
 
@@ -83,18 +87,26 @@ fun PuzzleHubScreen(
                 .widthIn(max = 680.dp)
                 .fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 18.dp else 14.dp)
         ) {
             item {
-                Text(
-                    text = "Accessed Puzzles & High Scores",
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                Text(
-                    text = "Access puzzles during RPG Chapters & Community Missions—then view your stats and replay them here at higher paces for bigger points!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(
+                    modifier = Modifier.speakOnTouch(
+                        "Accessed Puzzles and High Scores. ${accessedPuzzles.size} of ${PuzzleType.entries.size} puzzles unlocked."
+                    )
+                ) {
+                    Text(
+                        text = "Accessed Puzzles & High Scores",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    if (!a11y.calmMode) {
+                        Text(
+                            text = "Access puzzles during RPG Chapters & Community Missions—then view your stats and replay them here at higher paces for bigger points!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             item {
@@ -130,13 +142,19 @@ fun PuzzleHubScreen(
                                     label = { Text("${tier.label} $multText") },
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Difficulty ${tier.label}, $multText score multiplier")
                                         .testTag("difficulty_chip_${tier.name.lowercase()}")
                                 )
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .speakOnTouch(
+                                    "Cozy Assist is ${if (uiState.profile.gentleMode) "ON" else "OFF"}. Helpful conflict cues and extra calm hints."
+                                ),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -159,7 +177,9 @@ fun PuzzleHubScreen(
                             Switch(
                                 checked = uiState.profile.gentleMode,
                                 onCheckedChange = onToggleGentleMode,
-                                modifier = Modifier.testTag("gentle_mode_switch")
+                                modifier = Modifier
+                                    .speakOnTouch("Toggle Cozy Assist")
+                                    .testTag("gentle_mode_switch")
                             )
                         }
                     }
@@ -211,6 +231,8 @@ fun PuzzleHubScreen(
                                     onClick = onNavigateToGrove,
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Go to Grove to find puzzles")
                                         .testTag("hub_go_to_grove_button")
                                 ) {
                                     Icon(
@@ -225,6 +247,8 @@ fun PuzzleHubScreen(
                                     onClick = onNavigateToMissions,
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Go to Missions to find puzzles")
                                         .testTag("hub_go_to_missions_button")
                                 ) {
                                     Icon(
@@ -293,6 +317,7 @@ private fun PuzzleSanctuaryCard(
     solvedCount: Int,
     onPlayLevel: (Int) -> Unit
 ) {
+    val a11y = LocalAccessibilityUi.current
     val (icon, accent) = puzzleStyle(puzzle)
     val replayableLevels = (1..currentLevel).toList()
 
@@ -303,11 +328,12 @@ private fun PuzzleSanctuaryCard(
         border = BorderStroke(1.5.dp, accent.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
+            .speakOnTouch("${puzzle.title}, ${puzzle.skill.displayName}. Level $currentLevel, best score $bestScore points.")
             .testTag("puzzle_card_${puzzle.id}")
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(if (a11y.calmMode) 18.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 12.dp else 10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -334,17 +360,19 @@ private fun PuzzleSanctuaryCard(
                             text = puzzle.title,
                             style = MaterialTheme.typography.titleLarge
                         )
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = accent.copy(alpha = 0.18f)
-                        ) {
-                            Text(
-                                text = puzzle.skill.displayName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accent,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
+                        if (!a11y.calmMode) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = accent.copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    text = puzzle.skill.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = accent,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
                     Text(
@@ -401,17 +429,26 @@ private fun PuzzleSanctuaryCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Text(
-                    text = "$solvedCount won",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (!a11y.calmMode) {
+                    Text(
+                        text = "$solvedCount won",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
+            val playLabel = if (solvedCount > 0) {
+                "Play Level $currentLevel · Beat $bestScore pts"
+            } else {
+                "Play Level $currentLevel"
+            }
             Button(
                 onClick = { onPlayLevel(currentLevel) },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .minimumInteractiveComponentSize()
+                    .speakOnTouch("Play ${puzzle.title} Level $currentLevel")
                     .testTag("play_puzzle_${puzzle.id}")
             ) {
                 Icon(
@@ -420,13 +457,7 @@ private fun PuzzleSanctuaryCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (solvedCount > 0) {
-                        "Play Level $currentLevel · Beat $bestScore pts"
-                    } else {
-                        "Play Level $currentLevel"
-                    }
-                )
+                Text(text = playLabel)
             }
 
             if (currentLevel > 1 || solvedCount > 0) {
@@ -443,9 +474,12 @@ private fun PuzzleSanctuaryCard(
                             OutlinedButton(
                                 onClick = { onPlayLevel(lvl) },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.testTag(
-                                    if (lvl == 1) "warmup_puzzle_${puzzle.id}" else "replay_${puzzle.id}_lv_$lvl"
-                                )
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Replay ${puzzle.title} Level $lvl")
+                                    .testTag(
+                                        if (lvl == 1) "warmup_puzzle_${puzzle.id}" else "replay_${puzzle.id}_lv_$lvl"
+                                    )
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Replay,
@@ -469,12 +503,14 @@ private fun LockedPuzzleCard(
     onNavigateToGrove: () -> Unit,
     onNavigateToMissions: () -> Unit
 ) {
+    val a11y = LocalAccessibilityUi.current
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
+            .speakOnTouch("Locked puzzle ${puzzle.title}. ${puzzle.discoveryHint}")
             .testTag("locked_puzzle_card_${puzzle.id}")
     ) {
         Column(
@@ -507,16 +543,18 @@ private fun LockedPuzzleCard(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                text = puzzle.skill.displayName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
+                        if (!a11y.calmMode) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = puzzle.skill.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
                     Text(
@@ -534,6 +572,8 @@ private fun LockedPuzzleCard(
                     onClick = onNavigateToGrove,
                     modifier = Modifier
                         .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Open Grove to find ${puzzle.title}")
                         .testTag("locked_go_grove_${puzzle.id}")
                 ) {
                     Icon(
@@ -548,6 +588,8 @@ private fun LockedPuzzleCard(
                     onClick = onNavigateToMissions,
                     modifier = Modifier
                         .weight(1f)
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Open Missions to find ${puzzle.title}")
                         .testTag("locked_go_missions_${puzzle.id}")
                 ) {
                     Icon(

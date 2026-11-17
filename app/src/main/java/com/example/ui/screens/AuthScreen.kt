@@ -60,7 +60,10 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
+import com.example.ui.components.ComfortAccessibilityBar
 import com.example.ui.components.JungleAtmosphereBackground
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FireflyGoldAccent
 import com.example.ui.theme.StarlightVioletAccent
@@ -83,6 +86,7 @@ fun AuthScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
+    val calmMode = LocalAccessibilityUi.current.calmMode
 
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -116,9 +120,9 @@ fun AuthScreen(
         } catch (e: CancellationException) {
             throw e
         } catch (e: NoCredentialException) {
-            Log.d(AUTH_TAG, "No authorized Google credentials found for silent sign-in")
+            Log.d(AUTH_TAG, "No authorized Google credentials found for silent sign-in ${e.message}")
         } catch (e: GetCredentialCancellationException) {
-            Log.d(AUTH_TAG, "Silent Google sign-in cancelled")
+            Log.d(AUTH_TAG, "Silent Google sign-in cancelled: ${e.message}")
         } catch (e: Exception) {
             Log.d(AUTH_TAG, "Silent Google sign-in skipped: ${e.message}")
         } finally {
@@ -170,157 +174,187 @@ fun AuthScreen(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.safeDrawing
         ) { innerPadding ->
-            Box(
+            Column(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                contentAlignment = Alignment.Center
             ) {
-                Column(
+                ComfortAccessibilityBar()
+
+                Box(
                     modifier = Modifier
-                        .widthIn(max = 540.dp)
+                        .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(28.dp),
-                        tonalElevation = 6.dp,
-                        border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth()
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 540.dp)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(if (calmMode) 18.dp else 16.dp)
                     ) {
-                        Box(modifier = Modifier.height(220.dp)) {
-                            Image(
-                                painter = painterResource(id = R.drawable.img_jungle_canopy_hero),
-                                contentDescription = stringResource(R.string.cd_jungle_hero),
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0x440B1A13),
-                                                Color(0xB80B1A13),
-                                                Color(0xF0091610)
-                                            )
-                                        )
-                                    )
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(20.dp),
-                                verticalArrangement = Arrangement.Bottom
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.app_name),
-                                    style = MaterialTheme.typography.displayMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Solari Magitech Canopy · Mythical Jungle RPG",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = Color(0xFFFFE7A3)
-                                )
-                            }
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(26.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        tonalElevation = 4.dp,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(22.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Step into the Whispering Canopy",
-                                style = MaterialTheme.typography.headlineSmall,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = "Sign in with Google to save your Solari explorers, mythical creature bonds, quest lore, and 7 brain-teaser puzzle streaks across devices.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                AuthFeatureRow(
-                                    icon = Icons.Rounded.Extension,
-                                    tint = FireflyGoldAccent,
-                                    text = "7 anytime mind-teasers for Memory, Logic, Observation & Spatial skills"
-                                )
-                                AuthFeatureRow(
-                                    icon = Icons.Rounded.Pets,
-                                    tint = DewTealAccent,
-                                    text = "Befriend magical creatures & unlock heroes of every realm"
-                                )
-                                AuthFeatureRow(
-                                    icon = Icons.Rounded.CloudDone,
-                                    tint = StarlightVioletAccent,
-                                    text = "Automatic Cloud Firestore sync scoped to your explorer profile"
-                                )
-                            }
-
-                            if (statusMessage != null) {
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.errorContainer,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = statusMessage!!,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
-                                }
-                            }
-
-                            Button(
-                                onClick = ::launchInteractiveGoogleSignIn,
-                                enabled = !isLoading,
-                                shape = RoundedCornerShape(16.dp),
+                        if (!calmMode) {
+                            Surface(
+                                shape = RoundedCornerShape(28.dp),
+                                tonalElevation = 6.dp,
+                                border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.4f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(54.dp)
-                                    .testTag("google_sign_in_button")
+                                    .speakOnTouch("Fernfable. Solari Magitech Canopy Mythical Jungle RPG.")
                             ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(22.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.5.dp
+                                Box(modifier = Modifier.height(210.dp)) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.img_jungle_canopy_hero),
+                                        contentDescription = stringResource(R.string.cd_jungle_hero),
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
                                     )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Connecting Sanctuary...")
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Rounded.AutoAwesome,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(
+                                                        Color(0x440B1A13),
+                                                        Color(0xB80B1A13),
+                                                        Color(0xF0091610)
+                                                    )
+                                                )
+                                            )
                                     )
-                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(20.dp),
+                                        verticalArrangement = Arrangement.Bottom
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.app_name),
+                                            style = MaterialTheme.typography.displayMedium,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Solari Magitech Canopy · Mythical Jungle RPG",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = Color(0xFFFFE7A3)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(26.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.96f),
+                            tonalElevation = if (calmMode) 2.dp else 4.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .speakOnTouch(
+                                    "Fernfable Sign In. Sign in with Google to save your explorers, creatures, quests, and puzzle streaks."
+                                )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(if (calmMode) 24.dp else 22.dp),
+                                verticalArrangement = Arrangement.spacedBy(if (calmMode) 16.dp else 14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                if (calmMode) {
                                     Text(
-                                        text = "Continue with Google",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                        text = stringResource(R.string.app_name),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
                                     )
+                                }
+                                Text(
+                                    text = "Step into the Whispering Canopy",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Sign in with Google to save your Solari explorers, mythical creature bonds, quest lore, and 7 brain-teaser puzzle streaks across devices.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                if (!calmMode) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        AuthFeatureRow(
+                                            icon = Icons.Rounded.Extension,
+                                            tint = FireflyGoldAccent,
+                                            text = "7 anytime mind-teasers for Memory, Logic, Observation & Spatial skills"
+                                        )
+                                        AuthFeatureRow(
+                                            icon = Icons.Rounded.Pets,
+                                            tint = DewTealAccent,
+                                            text = "Befriend magical creatures & unlock heroes of every realm"
+                                        )
+                                        AuthFeatureRow(
+                                            icon = Icons.Rounded.CloudDone,
+                                            tint = StarlightVioletAccent,
+                                            text = "Automatic Cloud Firestore sync scoped to your explorer profile"
+                                        )
+                                    }
+                                }
+
+                                if (statusMessage != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .speakOnTouch(statusMessage ?: "")
+                                    ) {
+                                        Text(
+                                            text = statusMessage!!,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.padding(12.dp)
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = ::launchInteractiveGoogleSignIn,
+                                    enabled = !isLoading,
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(54.dp)
+                                        .speakOnTouch("Continue with Google button. Sign in to start playing Fernfable.")
+                                        .testTag("google_sign_in_button")
+                                ) {
+                                    if (isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.5.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("Connecting Sanctuary...")
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AutoAwesome,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = "Continue with Google",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }

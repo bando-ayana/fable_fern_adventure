@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "869226611953-7qtel0d48dr4tjoq2i92lj2a0t96sd1u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "55cd3318b10b2730328611e02067fd26120c8e5f"
+          }
+        },
+        {
           "client_id": "869226611953-iqo4n20quqpimd1r2jgnessvpc7u130q.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

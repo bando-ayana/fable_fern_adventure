@@ -107,6 +107,21 @@ data class NearestWorldTarget(
     val creature: WorldCreatureActor? = null
 )
 
+data class PuzzleSpawnPoint(
+    val id: String,
+    val title: String,
+    val x: Float,
+    val y: Float,
+    val suggestedPuzzle: PuzzleType,
+    val isActiveShrine: Boolean
+)
+
+data class MinimapRadarSnapshot(
+    val nearbyInteractables: List<WorldInteractable>,
+    val nearbyPuzzleSpawns: List<PuzzleSpawnPoint>,
+    val nearbyEnemies: List<WorldCreatureActor>
+)
+
 data class RpgWorldState(
     val heroX: Float = 5.5f,
     val heroY: Float = 5.5f,
@@ -135,6 +150,7 @@ object RpgWorldEngine {
     const val CREATURE_AGGRO_RADIUS = 2.5f
     const val CREATURE_MELEE_ENGAGE_RADIUS = 0.88f
     const val CREATURE_INTERACT_RADIUS = 1.95f
+    const val MINIMAP_NEARBY_RADIUS = 5.5f
 
     private val terrain: Array<Array<WorldTile>> = buildTerrainGrid()
 
@@ -401,6 +417,104 @@ object RpgWorldEngine {
             targetId = "heartwood_shrine"
         )
     )
+
+    val puzzleSpawnPoints: List<PuzzleSpawnPoint> by lazy {
+        val activeShrines = worldInteractables
+            .filter { it.kind == InteractableKind.PUZZLE_PEDESTAL }
+            .map { obj ->
+                PuzzleSpawnPoint(
+                    id = "spawn_${obj.id}",
+                    title = obj.title,
+                    x = obj.x,
+                    y = obj.y,
+                    suggestedPuzzle = PuzzleType.fromId(obj.targetId),
+                    isActiveShrine = true
+                )
+            }
+        val potentialClearings = listOf(
+            PuzzleSpawnPoint(
+                id = "potential_solari_ring",
+                title = "Solari Brass Rune Ring",
+                x = 8.5f,
+                y = 5.5f,
+                suggestedPuzzle = PuzzleType.FIREFLY_ECHO,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_hollow_clearing",
+                title = "Moss Hollow Spore Circle",
+                x = 14.5f,
+                y = 8.5f,
+                suggestedPuzzle = PuzzleType.MUSHROOM_MELODY,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_lagoon_mist",
+                title = "Dew Lagoon Mist Clearing",
+                x = 4.5f,
+                y = 15.5f,
+                suggestedPuzzle = PuzzleType.VINE_WEAVER,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_briar_ridge",
+                title = "Briar Ridge Lookout Ring",
+                x = 7.5f,
+                y = 19.5f,
+                suggestedPuzzle = PuzzleType.CANOPY_SPOTTER,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_glade_quartz",
+                title = "Mirror Glade Quartz Verge",
+                x = 19.5f,
+                y = 14.5f,
+                suggestedPuzzle = PuzzleType.GROVE_GRID,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_orchard_petal",
+                title = "Starbloom Terrace Clearing",
+                x = 23.5f,
+                y = 8.5f,
+                suggestedPuzzle = PuzzleType.FERN_MOSAIC,
+                isActiveShrine = false
+            ),
+            PuzzleSpawnPoint(
+                id = "potential_heartwood_seal",
+                title = "Heartwood Resonant Floor",
+                x = 23.5f,
+                y = 19.5f,
+                suggestedPuzzle = PuzzleType.SPIRIT_LOCK,
+                isActiveShrine = false
+            )
+        )
+        activeShrines + potentialClearings
+    }
+
+    fun computeMinimapRadar(
+        state: RpgWorldState,
+        completedMissions: Set<String> = emptySet(),
+        puzzleSpawns: List<PuzzleSpawnPoint> = puzzleSpawnPoints,
+        radius: Float = MINIMAP_NEARBY_RADIUS
+    ): MinimapRadarSnapshot {
+        val nearbyInteractables = state.interactables.filter { obj ->
+            val harvested = obj.id in state.harvestedIds
+            !harvested && hypot(state.heroX - obj.x, state.heroY - obj.y) <= radius
+        }
+        val nearbyPuzzleSpawns = puzzleSpawns.filter { spawn ->
+            hypot(state.heroX - spawn.x, state.heroY - spawn.y) <= radius
+        }
+        val nearbyEnemies = state.creatures.filter { actor ->
+            val cleared = actor.missionId != null && actor.missionId in completedMissions
+            actor.isWildEnemy && !cleared && hypot(state.heroX - actor.x, state.heroY - actor.y) <= radius
+        }
+        return MinimapRadarSnapshot(
+            nearbyInteractables = nearbyInteractables,
+            nearbyPuzzleSpawns = nearbyPuzzleSpawns,
+            nearbyEnemies = nearbyEnemies
+        )
+    }
 
     fun initialCreatures(): List<WorldCreatureActor> = listOf(
         // Friendly Sanctuary Mythical Creatures wandering their home groves

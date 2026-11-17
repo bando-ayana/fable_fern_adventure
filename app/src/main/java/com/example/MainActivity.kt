@@ -20,6 +20,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.GameRepository
 import com.example.ui.FernfableApp
 import com.example.ui.FernfableViewModel
+import com.example.ui.components.ProvideFernfableAccessibility
 import com.example.ui.screens.AuthScreen
 import com.example.ui.theme.FernfableTheme
 import com.google.firebase.Firebase
@@ -41,7 +42,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FernfableTheme {
-                AppNavigation()
+                ProvideFernfableAccessibility {
+                    AppNavigation()
+                }
             }
         }
     }

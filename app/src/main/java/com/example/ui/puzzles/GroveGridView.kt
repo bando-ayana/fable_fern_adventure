@@ -26,11 +26,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Backspace
+import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.example.puzzle.GroveGridEngine
 import com.example.puzzle.GroveGridPuzzle
 import com.example.puzzle.GroveRune
+import com.example.ui.components.speakOnTouch
 
 @Composable
 fun GroveGridView(
@@ -60,10 +62,12 @@ fun GroveGridView(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val gridRuleText = "Fill each row, column, and 2x2 mossy box with all 4 runes."
         Text(
-            text = "Fill each row, column, and 2x2 mossy box with all 4 runes.",
+            text = gridRuleText,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.speakOnTouch(gridRuleText)
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -136,6 +140,14 @@ fun GroveGridView(
                                                     label = "grove_cell_border_$idx"
                                                 )
 
+                                                val cellSpeech = buildString {
+                                                    append("Row ${r + 1} Column ${c + 1}: ")
+                                                    append(visual?.label ?: "empty")
+                                                    if (isGiven) append(", locked clue")
+                                                    if (isSelected) append(", selected")
+                                                    if (hasConflict) append(", duplicate conflict")
+                                                }
+
                                                 Surface(
                                                     shape = RoundedCornerShape(10.dp),
                                                     color = cellBg,
@@ -146,6 +158,7 @@ fun GroveGridView(
                                                     modifier = Modifier
                                                         .weight(1f)
                                                         .aspectRatio(1f)
+                                                        .speakOnTouch(cellSpeech)
                                                         .testTag("grove_cell_$idx")
                                                         .clickable(enabled = !isGiven) {
                                                             onSelectCell(idx)
@@ -217,6 +230,8 @@ fun GroveGridView(
                     modifier = Modifier
                         .weight(1f)
                         .height(64.dp)
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Place ${visual.label}")
                         .testTag("grove_picker_${rune.id}")
                         .clickable(enabled = selectedCell != null) {
                             onPlaceRune(rune.id)
@@ -248,6 +263,8 @@ fun GroveGridView(
                 modifier = Modifier
                     .height(64.dp)
                     .widthIn(min = 52.dp)
+                    .minimumInteractiveComponentSize()
+                    .speakOnTouch("Clear selected cell")
                     .testTag("grove_picker_clear")
                     .clickable(enabled = selectedCell != null) {
                         onPlaceRune(0)
@@ -258,7 +275,7 @@ fun GroveGridView(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Backspace,
+                        imageVector = Icons.AutoMirrored.Rounded.Backspace,
                         contentDescription = "Clear selected cell",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

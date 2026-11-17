@@ -8,5 +8,6 @@ data class TopDestination(
     @param:StringRes val labelRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
-    val testTag: String
+    val testTag: String,
+    val spokenDescription: String,
 )

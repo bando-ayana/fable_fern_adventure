@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,6 +68,8 @@ import com.example.rpg.BattlePhase
 import com.example.rpg.RpgBattleEngine
 import com.example.rpg.RpgBattleState
 import com.example.ui.components.BattleArenaStage
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -89,6 +92,7 @@ fun MissionBattleSheet(
     onLaunchPuzzle: (PuzzleType, Int?, Boolean) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val a11y = LocalAccessibilityUi.current
     val opponent = battleState.mission.opponent
     val isBeautiful = opponent.temperament == WildCreatureTemperament.BEAUTIFUL
     val enemyAccent = if (isBeautiful) StarlightVioletAccent else OrchidCoralAccent
@@ -102,7 +106,7 @@ fun MissionBattleSheet(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 14.dp else 12.dp)
         ) {
             AnimatedContent(
                 targetState = battleState.phase,
@@ -115,7 +119,9 @@ fun MissionBattleSheet(
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
                                 color = FernEmeraldAccent.copy(alpha = 0.14f),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .speakOnTouch("Community Project: ${battleState.mission.communityProject}. ${battleState.mission.communityBenefit}")
                             ) {
                                 Row(
                                     modifier = Modifier.padding(12.dp),
@@ -155,7 +161,9 @@ fun MissionBattleSheet(
                                 shape = RoundedCornerShape(16.dp),
                                 color = enemyAccent.copy(alpha = 0.12f),
                                 border = BorderStroke(1.dp, enemyAccent.copy(alpha = 0.35f)),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .speakOnTouch("Wild creature ${opponent.name}, ${opponent.temperament.label}. ${opponent.description}")
                             ) {
                                 Column(
                                     modifier = Modifier.padding(12.dp),
@@ -183,6 +191,8 @@ fun MissionBattleSheet(
                                 onClick = onAdvanceCommunityStep,
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch(battleState.mission.communityActionLabel)
                                     .testTag("begin_mission_action_button")
                             ) {
                                 Text(battleState.mission.communityActionLabel)
@@ -196,6 +206,8 @@ fun MissionBattleSheet(
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Scout and access ${puzzleChallenge.title} puzzle")
                                         .testTag("battle_prep_puzzle_button")
                                 ) {
                                     Icon(
@@ -209,7 +221,10 @@ fun MissionBattleSheet(
                             }
                             TextButton(
                                 onClick = onDismiss,
-                                modifier = Modifier.align(Alignment.End)
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Return later")
                             ) {
                                 Text("Return Later")
                             }
@@ -233,16 +248,18 @@ fun MissionBattleSheet(
                             label = "hero_mana"
                         )
                         val creaturePulse by animateFloatAsState(
-                            targetValue = if (battleState.lastEnemyHitTick % 2 == 1) 0.96f else 1f,
+                            targetValue = if (!a11y.calmMode && battleState.lastEnemyHitTick % 2 == 1) 0.96f else 1f,
                             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                             label = "enemy_hit_scale"
                         )
 
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 12.dp else 10.dp)) {
                             BattleArenaStage(
                                 heroId = heroId,
                                 battleState = battleState,
-                                modifier = Modifier.testTag("battle_visual_arena")
+                                modifier = Modifier
+                                    .speakOnTouch("Battle stage: ${battleState.heroName} facing ${opponent.name}")
+                                    .testTag("battle_visual_arena")
                             )
 
                             // Wild Creature Arena Card
@@ -253,6 +270,7 @@ fun MissionBattleSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .scale(creaturePulse)
+                                    .speakOnTouch("${opponent.name}: ${battleState.enemyHp} of ${battleState.enemyMaxHp} health. Next move: ${battleState.upcomingEnemyMove} for about ${battleState.upcomingEnemyDamage} damage.")
                                     .testTag("battle_enemy_card")
                             ) {
                                 Column(
@@ -326,7 +344,9 @@ fun MissionBattleSheet(
                                 color = MaterialTheme.colorScheme.surface,
                                 tonalElevation = 2.dp,
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .speakOnTouch("${battleState.heroName}. Health ${battleState.heroHp} of ${battleState.heroMaxHp}. Mana ${battleState.heroMana} of ${battleState.heroMaxMana}.${if (battleState.wardActive) " Ward shield active." else ""}")
                             ) {
                                 Column(
                                     modifier = Modifier.padding(14.dp),
@@ -406,16 +426,19 @@ fun MissionBattleSheet(
                             }
 
                             // Combat Log
+                            val logCount = if (a11y.calmMode) 1 else 3
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .speakOnTouch(battleState.combatLog.firstOrNull() ?: "Battle ready")
                             ) {
                                 Column(
                                     modifier = Modifier.padding(10.dp),
                                     verticalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
-                                    battleState.combatLog.take(3).forEachIndexed { idx, line ->
+                                    battleState.combatLog.take(logCount).forEachIndexed { idx, line ->
                                         Text(
                                             text = line,
                                             style = MaterialTheme.typography.bodySmall,
@@ -436,6 +459,8 @@ fun MissionBattleSheet(
                                     onClick = { onPerformAction(BattleActionType.SOLAR_STRIKE) },
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Solar Strike. Deals damage and restores 6 Mana.")
                                         .testTag("battle_solar_strike_button")
                                 ) {
                                     Text("Solar Strike (+6 Mana)")
@@ -445,6 +470,8 @@ fun MissionBattleSheet(
                                     enabled = battleState.canCastArcaneSpell,
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Arcane Spell, costs ${RpgBattleEngine.ARCANE_SPELL_COST} Mana. ${if (battleState.canCastArcaneSpell) "Ready." else "Not enough Mana."}")
                                         .testTag("battle_arcane_spell_button")
                                 ) {
                                     Icon(
@@ -466,6 +493,8 @@ fun MissionBattleSheet(
                                     enabled = battleState.canCastWard,
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Guardian Ward, costs ${RpgBattleEngine.WARD_SPELL_COST} Mana. Reduces incoming damage.")
                                         .testTag("battle_ward_button")
                                 ) {
                                     Icon(
@@ -481,6 +510,8 @@ fun MissionBattleSheet(
                                     enabled = battleState.canSootheSpirit,
                                     modifier = Modifier
                                         .weight(1f)
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch(if (battleState.canSootheSpirit) "Calm creature spirit, costs 8 Mana, ends battle peacefully." else "Calm locked until creature is below 45 percent health.")
                                         .testTag("battle_soothe_button")
                                 ) {
                                     Icon(
@@ -510,6 +541,8 @@ fun MissionBattleSheet(
                                         enabled = qty > 0,
                                         modifier = Modifier
                                             .weight(1f)
+                                            .minimumInteractiveComponentSize()
+                                            .speakOnTouch("Use ${item.displayName}, $qty available")
                                             .testTag("battle_loot_${item.id}")
                                     ) {
                                         Icon(
@@ -531,6 +564,8 @@ fun MissionBattleSheet(
                                 onClick = onRetreat,
                                 modifier = Modifier
                                     .align(Alignment.End)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Retreat safely back to camp")
                                     .testTag("battle_retreat_button")
                             ) {
                                 Text("Retreat Safely")
@@ -635,7 +670,11 @@ fun MissionBattleSheet(
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .speakOnTouch(
+                                            "Mission victory! Earned ${missionSummary.expGained} EXP, ${missionSummary.magicGained} Magic, ${missionSummary.manaGained} Mana, ${missionSummary.nectarGained} Nectar."
+                                        )
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(14.dp),
@@ -668,6 +707,8 @@ fun MissionBattleSheet(
                                     onClick = onDismiss,
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Claim Spoils and Continue")
                                         .testTag("mission_victory_done_button")
                                 ) {
                                     Text("Claim Spoils & Continue")

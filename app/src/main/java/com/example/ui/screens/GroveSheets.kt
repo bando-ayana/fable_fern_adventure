@@ -41,9 +41,12 @@ import com.example.model.PuzzleType
 import com.example.model.StoryChoice
 import com.example.ui.components.CreaturePortrait
 import com.example.ui.components.HeroAvatar
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +55,7 @@ fun HeroRosterSheet(
     onSelectHero: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val a11y = LocalAccessibilityUi.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -59,17 +63,19 @@ fun HeroRosterSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 16.dp else 12.dp)
         ) {
             Text(
                 text = "Solari Vanguard & Allies",
                 style = MaterialTheme.typography.headlineSmall
             )
-            Text(
-                text = "Begin with Solari's thriving magitech pioneers, then welcome travelers of every race as Sunbeam Nectar grows.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (!a11y.calmMode) {
+                Text(
+                    text = "Begin with Solari's thriving magitech pioneers, then welcome travelers of every race as Sunbeam Nectar grows.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             JungleLoreCatalog.heroes.forEach { hero ->
                 val isUnlocked = profile.nectar >= hero.unlockNectar
@@ -88,6 +94,9 @@ fun HeroRosterSheet(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .speakOnTouch(
+                            "${hero.name}, ${hero.title}. ${if (isSelected) "Currently active." else if (isUnlocked) "Unlocked." else "Unlocks at ${hero.unlockNectar} Nectar."} ${hero.bio}"
+                        )
                         .testTag("hero_card_${hero.id}")
                 ) {
                     Column(
@@ -114,11 +123,13 @@ fun HeroRosterSheet(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )
-                                Text(
-                                    text = "Magic ${hero.baseMagic} · Tech ${hero.baseTech} · Heart ${hero.baseHeart}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (!a11y.calmMode) {
+                                    Text(
+                                        text = "Magic ${hero.baseMagic} · Tech ${hero.baseTech} · Heart ${hero.baseHeart}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
 
@@ -165,7 +176,10 @@ fun HeroRosterSheet(
                             } else if (isUnlocked) {
                                 FilledTonalButton(
                                     onClick = { onSelectHero(hero.id) },
-                                    modifier = Modifier.testTag("select_hero_${hero.id}")
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Play as ${hero.name}")
+                                        .testTag("select_hero_${hero.id}")
                                 ) {
                                     Text("Play Hero")
                                 }
@@ -264,6 +278,7 @@ fun MagitechWorkshopSheet(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .speakOnTouch("${relic.name}. ${relic.description}. ${if (isEquipped) "Equipped." else if (isUnlocked) "Unlocked." else "Costs ${relic.shardCost} shards."}")
                         .testTag("relic_card_${relic.id}")
                 ) {
                     Row(
@@ -307,7 +322,10 @@ fun MagitechWorkshopSheet(
                             isUnlocked -> {
                                 FilledTonalButton(
                                     onClick = { onCraftOrEquipRelic(relic.id) },
-                                    modifier = Modifier.testTag("equip_relic_${relic.id}")
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Equip ${relic.name}")
+                                        .testTag("equip_relic_${relic.id}")
                                 ) {
                                     Text("Equip")
                                 }
@@ -316,7 +334,10 @@ fun MagitechWorkshopSheet(
                                 Button(
                                     enabled = profile.moonstones >= relic.shardCost,
                                     onClick = { onCraftOrEquipRelic(relic.id) },
-                                    modifier = Modifier.testTag("forge_relic_${relic.id}")
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .speakOnTouch("Forge ${relic.name} for ${relic.shardCost} Moonstone Shards")
+                                        .testTag("forge_relic_${relic.id}")
                                 ) {
                                     Text("Forge (${relic.shardCost})")
                                 }
@@ -412,12 +433,14 @@ fun BiomeEncounterSheet(
                 }
             }
 
+            val storyText = encounterFeedback?.responseText ?: biome.storyIntro
             Surface(
                 shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.speakOnTouch(storyText)
             ) {
                 Text(
-                    text = encounterFeedback?.responseText ?: biome.storyIntro,
+                    text = storyText,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(16.dp)
                 )
@@ -429,6 +452,8 @@ fun BiomeEncounterSheet(
                         onClick = { onChooseStoryOption(biome, choice) },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("${choice.label}, plus ${choice.rewardExp} EXP")
                             .testTag("story_choice_${choice.id}")
                     ) {
                         Row(
@@ -460,6 +485,8 @@ fun BiomeEncounterSheet(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch("Jump to ${biome.signaturePuzzle.title} Mini-Puzzle")
                         .testTag("encounter_anytime_puzzle")
                 ) {
                     Icon(
@@ -483,13 +510,18 @@ fun BiomeEncounterSheet(
                         },
                         modifier = Modifier
                             .weight(1f)
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Play ${puzzleToOpen.title}")
                             .testTag("encounter_play_puzzle_button")
                     ) {
                         Text("Play ${puzzleToOpen.title}")
                     }
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.testTag("encounter_done_button")
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Continue")
+                            .testTag("encounter_done_button")
                     ) {
                         Text("Continue")
                     }

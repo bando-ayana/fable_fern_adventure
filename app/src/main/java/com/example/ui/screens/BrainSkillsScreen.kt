@@ -27,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,17 +40,20 @@ import com.example.model.BadgeDefinition
 import com.example.model.BrainSkill
 import com.example.model.PuzzleType
 import com.example.stateHolder.FernfableUiState
+import com.example.ui.components.LocalAccessibilityUi
 import com.example.ui.components.SkillRadarChart
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.FireflyGoldAccent
 
 @Composable
 fun BrainSkillsScreen(
     uiState: FernfableUiState,
-    onTrainSkill: (PuzzleType, Int?, Boolean) -> Unit,
-    onExploreRpg: () -> Unit,
+    onTrainSkill: (PuzzleType) -> Unit,
+    onExploreRpg: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val profile = uiState.profile
+    val a11y = LocalAccessibilityUi.current
     val totalStars = uiState.puzzleStats.values.sumOf { it.totalStars }
     val discoveredCreatures = uiState.creatureProgress.values.count { it.discovered }
 
@@ -62,18 +66,24 @@ fun BrainSkillsScreen(
                 .widthIn(max = 680.dp)
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 18.dp else 14.dp)
         ) {
             item {
-                Text(
-                    text = "Brain Skills & Mastery",
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                Text(
-                    text = "${profile.explorerRank} · ${profile.totalXp} Total Cognitive XP",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Column(
+                    modifier = Modifier.speakOnTouch(
+                        "Brain Skills and Mastery. ${profile.explorerRank}, ${profile.totalXp} Total Cognitive EXP."
+                    )
+                ) {
+                    Text(
+                        text = "Brain Skills & Mastery",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Text(
+                        text = "${profile.explorerRank} · ${profile.totalXp} Total Cognitive XP",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             item {
@@ -82,7 +92,11 @@ fun BrainSkillsScreen(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 3.dp,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch(
+                            "Cognitive radar summary: ${profile.totalPuzzlesSolved} puzzles won, $totalStars stars, best streak ${profile.bestStreak}."
+                        )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -134,10 +148,12 @@ fun BrainSkillsScreen(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 2.dp,
                     border = BorderStroke(1.dp, accent.copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("${skill.displayName}, Tier $level, $xp EXP. ${skill.subtitle}.")
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(if (a11y.calmMode) 16.dp else 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
@@ -170,15 +186,17 @@ fun BrainSkillsScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                            Text(
-                                text = if (isPuzzleAccessed) {
-                                    "${skill.subtitle} · ${matchingPuzzle.title} unlocked"
-                                } else {
-                                    "Access ${matchingPuzzle.title} in RPG to train here"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (!a11y.calmMode) {
+                                Text(
+                                    text = if (isPuzzleAccessed) {
+                                        "${skill.subtitle} · ${matchingPuzzle.title} unlocked"
+                                    } else {
+                                        "Access ${matchingPuzzle.title} in RPG to train here"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Spacer(modifier = Modifier.height(6.dp))
                             LinearProgressIndicator(
                                 progress = { levelProgress },
@@ -190,9 +208,12 @@ fun BrainSkillsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         FilledTonalButton(
                             onClick = {
-                                if (isPuzzleAccessed) onTrainSkill(matchingPuzzle, null, false) else onExploreRpg()
+                                if (isPuzzleAccessed) onTrainSkill(matchingPuzzle) else onExploreRpg()
                             },
-                            modifier = Modifier.testTag("train_skill_${skill.name.lowercase()}")
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .speakOnTouch(if (isPuzzleAccessed) "Replay ${matchingPuzzle.title}" else "Find ${matchingPuzzle.title} in RPG")
+                                .testTag("train_skill_${skill.name.lowercase()}")
                         ) {
                             if (!isPuzzleAccessed) {
                                 Icon(
@@ -236,10 +257,12 @@ fun BrainSkillsScreen(
                         1.dp,
                         if (unlocked) FireflyGoldAccent else MaterialTheme.colorScheme.outlineVariant
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("Badge: ${badge.title}. ${if (unlocked) "Earned." else badge.thresholdLabel} ${badge.description}")
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(if (a11y.calmMode) 16.dp else 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(

@@ -52,6 +52,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.puzzle.MushroomKind
 import com.example.puzzle.MushroomMelodyPuzzle
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -66,30 +68,39 @@ fun MushroomMelodyView(
     onTapSlot: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haloTransition = rememberInfiniteTransition(label = "mushroom_halo")
-    val haloPulse by haloTransition.animateFloat(
-        initialValue = 0.16f,
-        targetValue = 0.34f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "mushroom_halo_alpha"
-    )
+    val a11y = LocalAccessibilityUi.current
+    val haloPulse = if (a11y.calmMode) {
+        0.22f
+    } else {
+        val haloTransition = rememberInfiniteTransition(label = "mushroom_halo")
+        val animated by haloTransition.animateFloat(
+            initialValue = 0.16f,
+            targetValue = 0.34f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "mushroom_halo_alpha"
+        )
+        animated
+    }
+
+    val instructionText = if (selectedSlotIdx == null) {
+        "Tap any mushroom, then tap another spot to swap them!"
+    } else {
+        "Now tap the spot you want to swap with #${selectedSlotIdx + 1}."
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = if (selectedSlotIdx == null) {
-                "Tap any mushroom, then tap another spot to swap them!"
-            } else {
-                "Now tap the spot you want to swap with #${selectedSlotIdx + 1}."
-            },
+            text = instructionText,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.speakOnTouch(instructionText)
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -144,6 +155,12 @@ fun MushroomMelodyView(
                             .weight(1f)
                             .aspectRatio(0.78f)
                             .scale(slotScale)
+                            .speakOnTouch(
+                                buildString {
+                                    append("Spot #${idx + 1}: ${kind.displayName}")
+                                    if (isSelected) append(", selected")
+                                }
+                            )
                             .testTag("mushroom_slot_$idx")
                             .clickable { onTapSlot(idx) }
                     ) {
@@ -228,7 +245,9 @@ fun MushroomMelodyView(
                     shape = RoundedCornerShape(16.dp),
                     color = clueBg,
                     border = BorderStroke(1.dp, clueBorder),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("Clue ${idx + 1}: ${clue.text}${if (showGreen) ", matched" else ""}")
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),

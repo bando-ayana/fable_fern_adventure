@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import com.example.puzzle.CanopyCharm
 import com.example.puzzle.CanopySpotterPuzzle
 import com.example.puzzle.CharmBase
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -74,16 +76,30 @@ fun CanopySpotterView(
 ) {
     val round = puzzle.currentRound ?: return
 
-    val hintTransition = rememberInfiniteTransition(label = "spotter_hint_pulse")
-    val hintPulse by hintTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(750, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "spotter_hint_scale"
-    )
+    val a11y = LocalAccessibilityUi.current
+    val hintPulse = if (a11y.calmMode) {
+        1.0f
+    } else {
+        val hintTransition = rememberInfiniteTransition(label = "spotter_hint_pulse")
+        val animated by hintTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.06f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(750, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "spotter_hint_scale"
+        )
+        animated
+    }
+
+    val bannerSpeech = buildString {
+        append("Look ${round.roundNumber} of ${round.totalRounds}: ${round.prompt}")
+        if (!statusMessage.isNullOrBlank()) {
+            append(". ")
+            append(statusMessage)
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -91,8 +107,10 @@ fun CanopySpotterView(
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (a11y.calmMode) 0.92f else 0.7f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .speakOnTouch(bannerSpeech)
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -131,9 +149,12 @@ fun CanopySpotterView(
                 (fadeIn(tween(240)) + scaleIn(initialScale = 0.92f)) togetherWith fadeOut(tween(160))
             },
             label = "spotter_round_transition"
-        ) { _ ->
-            val columns = if (round.charms.size <= 4) 2 else 3
-            val rows = round.charms.chunked(columns)
+        ) { targetRound ->
+            val currentRound = puzzle.rounds.firstOrNull { it.roundNumber == targetRound } ?: round
+
+            // render based on currentRound
+            val columns = if (currentRound.charms.size <= 4) 2 else 3
+            val rows = currentRound.charms.chunked(columns)
 
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -177,6 +198,13 @@ fun CanopySpotterView(
                                 label = "spotter_border_${charm.id}"
                             )
 
+                            val charmSpeech = buildString {
+                                append("${charm.base.name.lowercase()} charm, ${charm.detailCount} details")
+                                if (charm.tilted) append(", tilted")
+                                if (isSelected) append(", already matched")
+                                if (isHinted && !isSelected) append(", hinted")
+                            }
+
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
                                 color = tileColor,
@@ -190,6 +218,7 @@ fun CanopySpotterView(
                                     .aspectRatio(1f)
                                     .scale(if (isHinted && !isSelected) hintPulse else tileScale)
                                     .alpha(tileAlpha)
+                                    .speakOnTouch(charmSpeech)
                                     .testTag("spotter_charm_${charm.id}")
                                     .clickable(enabled = !isSelected) { onTapCharm(charm.id) }
                             ) {

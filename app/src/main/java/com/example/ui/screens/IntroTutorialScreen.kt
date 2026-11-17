@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -15,12 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -75,11 +72,13 @@ import com.example.rpg.IntroStage
 import com.example.rpg.IntroTutorialEngine
 import com.example.rpg.IntroTutorialState
 import com.example.rpg.WorldActionType
+import com.example.ui.components.LocalAccessibilityUi
 import com.example.ui.components.VirtualAnalogStick
 import com.example.ui.components.drawInteractableObject
 import com.example.ui.components.drawWorldCreatureSprite
 import com.example.ui.components.drawWorldHeroSprite
 import com.example.ui.components.drawWorldTile
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
 import com.example.ui.theme.OrchidCoralAccent
@@ -110,6 +109,7 @@ fun IntroTutorialScreen(
 ) {
     val worldState = introState.worldState
     val stage = introState.stage
+    val calmMode = LocalAccessibilityUi.current.calmMode
     var joyX by remember { mutableFloatStateOf(0f) }
     var joyY by remember { mutableFloatStateOf(0f) }
     var canvasSize by remember { mutableStateOf(IntSize(800, 600)) }
@@ -168,16 +168,17 @@ fun IntroTutorialScreen(
         // Guided Lesson Coach Card
         Surface(
             shape = RoundedCornerShape(22.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            tonalElevation = 4.dp,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.96f),
+            tonalElevation = if (calmMode) 2.dp else 4.dp,
             border = BorderStroke(1.5.dp, FireflyGoldAccent.copy(alpha = 0.55f)),
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxWidth()
+                .speakOnTouch("Lesson: ${stage.title}. ${stage.instruction}")
                 .testTag("intro_lesson_card")
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(if (calmMode) 14.dp else 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
@@ -213,13 +214,15 @@ fun IntroTutorialScreen(
                                 )
                             }
                         }
-                        Text(
-                            text = "Lv.$heroLevel · Mana $mana/$maxMana · $nectar Nectar",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        if (!calmMode) {
+                            Text(
+                                text = "Lv.$heroLevel · Mana $mana/$maxMana · $nectar Nectar",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -227,6 +230,7 @@ fun IntroTutorialScreen(
                             onClick = onToggleAudioMute,
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
+                                .speakOnTouch(if (isAudioMuted) "Audio muted button" else "Audio on button. Tap to mute.")
                                 .testTag("intro_audio_toggle")
                         ) {
                             Icon(
@@ -244,6 +248,7 @@ fun IntroTutorialScreen(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
+                                .speakOnTouch("Skip Intro button")
                                 .testTag("intro_skip_button")
                         ) {
                             Text(
@@ -254,29 +259,31 @@ fun IntroTutorialScreen(
                     }
                 }
 
-                // 3-step visual training checklist
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    LessonStepChip(
-                        label = "1. Lantern",
-                        done = introState.lanternLit,
-                        active = stage == IntroStage.LESSON_MOVE_AND_LANTERN,
-                        modifier = Modifier.weight(1f)
-                    )
-                    LessonStepChip(
-                        label = "2. Shrine",
-                        done = introState.shrinePuzzleSolved,
-                        active = stage == IntroStage.LESSON_PUZZLE_SHRINE,
-                        modifier = Modifier.weight(1f)
-                    )
-                    LessonStepChip(
-                        label = "3. Battle",
-                        done = introState.sproutlingDefeated,
-                        active = stage == IntroStage.LESSON_WILD_CREATURE_BATTLE,
-                        modifier = Modifier.weight(1f)
-                    )
+                if (!calmMode) {
+                    // 3-step visual training checklist
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        LessonStepChip(
+                            label = "1. Lantern",
+                            done = introState.lanternLit,
+                            active = stage == IntroStage.LESSON_MOVE_AND_LANTERN,
+                            modifier = Modifier.weight(1f)
+                        )
+                        LessonStepChip(
+                            label = "2. Shrine",
+                            done = introState.shrinePuzzleSolved,
+                            active = stage == IntroStage.LESSON_PUZZLE_SHRINE,
+                            modifier = Modifier.weight(1f)
+                        )
+                        LessonStepChip(
+                            label = "3. Battle",
+                            done = introState.sproutlingDefeated,
+                            active = stage == IntroStage.LESSON_WILD_CREATURE_BATTLE,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
 
                 Text(
@@ -291,6 +298,7 @@ fun IntroTutorialScreen(
                 )
 
                 if (stage == IntroStage.GRADUATION_READY) {
+                    val graduateLabel = stringResource(R.string.intro_graduate_cta)
                     Button(
                         onClick = onGraduateToWorld,
                         colors = ButtonDefaults.buttonColors(
@@ -300,6 +308,7 @@ fun IntroTutorialScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .minimumInteractiveComponentSize()
+                            .speakOnTouch("$graduateLabel button")
                             .testTag("intro_graduate_button")
                     ) {
                         Icon(
@@ -309,7 +318,7 @@ fun IntroTutorialScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.intro_graduate_cta),
+                            text = graduateLabel,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -507,7 +516,9 @@ fun IntroTutorialScreen(
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                     border = BorderStroke(1.5.dp, FireflyGoldAccent.copy(alpha = 0.7f)),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("${worldState.dialogueSpeaker ?: ""}: ${worldState.dialogueBody ?: ""}")
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -531,7 +542,10 @@ fun IntroTutorialScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        IconButton(onClick = onDismissDialogue) {
+                        IconButton(
+                            onClick = onDismissDialogue,
+                            modifier = Modifier.speakOnTouch("Close dialogue button")
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = "Close dialogue"
@@ -555,7 +569,9 @@ fun IntroTutorialScreen(
                         joyX = x
                         joyY = y
                     },
-                    modifier = Modifier.testTag("intro_virtual_joystick")
+                    modifier = Modifier
+                        .speakOnTouch("Movement stick. Drag in any direction to walk.")
+                        .testTag("intro_virtual_joystick")
                 )
 
                 if (nearestTarget.actionType != WorldActionType.NONE) {
@@ -583,7 +599,7 @@ fun IntroTutorialScreen(
                                         )
                                     }
                                 }
-                                WorldActionType.NONE -> Unit
+                                else -> Unit
                             }
                         },
                         colors = if (isBattle) {
@@ -594,6 +610,7 @@ fun IntroTutorialScreen(
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .minimumInteractiveComponentSize()
+                            .speakOnTouch("Action button: ${nearestTarget.label}")
                             .testTag("intro_interact_button")
                     ) {
                         Icon(
@@ -616,7 +633,8 @@ fun IntroTutorialScreen(
                 } else {
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = Color(0xBB0D1E16)
+                        color = Color(0xBB0D1E16),
+                        modifier = Modifier.speakOnTouch("Follow the golden ring in the glade.")
                     ) {
                         Text(
                             text = "Follow the golden beacon ring!",

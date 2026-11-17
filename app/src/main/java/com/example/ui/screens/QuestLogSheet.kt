@@ -18,13 +18,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,6 +58,8 @@ import com.example.model.LoreCategory
 import com.example.model.PuzzleType
 import com.example.rpg.DailyStreakTracker
 import com.example.stateHolder.FernfableUiState
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -116,7 +119,7 @@ fun QuestLogSheet(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Rounded.MenuBook,
+                        imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp)
@@ -138,24 +141,31 @@ fun QuestLogSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val a11y = LocalAccessibilityUi.current
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     text = { Text("Objectives (${activeBiomes.size})") },
-                    modifier = Modifier.testTag("quest_tab_objectives")
+                    modifier = Modifier
+                        .speakOnTouch("Objectives tab, ${activeBiomes.size} active")
+                        .testTag("quest_tab_objectives")
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     text = { Text("Completed") },
-                    modifier = Modifier.testTag("quest_tab_completed")
+                    modifier = Modifier
+                        .speakOnTouch("Completed tasks tab")
+                        .testTag("quest_tab_completed")
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
                     text = { Text("Lore ($discoveredLoreCount)") },
-                    modifier = Modifier.testTag("quest_tab_lore")
+                    modifier = Modifier
+                        .speakOnTouch("Discovered Lore tab, $discoveredLoreCount unlocked")
+                        .testTag("quest_tab_lore")
                 )
             }
 
@@ -165,7 +175,7 @@ fun QuestLogSheet(
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 16.dp else 12.dp)
             ) {
                 when (selectedTab) {
                     0 -> ObjectivesTabContent(
@@ -219,6 +229,13 @@ private fun ObjectivesTabContent(
         DailyStreakTracker.previewNextDayBonus(profile.dailyStreak)
     }
 
+    val streakDetails = if (profile.dailyStreak > 0) {
+        val todayBonus = DailyStreakTracker.rewardForStreakDay(profile.dailyStreak)
+        "Today's bonus claimed (+${todayBonus.first} EXP, +${todayBonus.second} Mana). Return tomorrow for Day ${nextReward.nextDayStreak}: +${nextReward.bonusHeroExp} Hero EXP & +${nextReward.bonusMana} Mana!"
+    } else {
+        "Play any quest, mission, or puzzle daily to earn scaling Hero EXP and Mana bonuses!"
+    }
+
     // Daily Activity Streak card
     Surface(
         shape = RoundedCornerShape(18.dp),
@@ -226,6 +243,7 @@ private fun ObjectivesTabContent(
         border = BorderStroke(1.dp, FireflyGoldAccent.copy(alpha = 0.45f)),
         modifier = Modifier
             .fillMaxWidth()
+            .speakOnTouch("${profile.dailyStreak} Day Activity Streak. Best ${profile.longestDailyStreak} days. $streakDetails")
             .testTag("quest_log_daily_streak_card")
     ) {
         Column(
@@ -260,12 +278,7 @@ private fun ObjectivesTabContent(
                 )
             }
             Text(
-                text = if (profile.dailyStreak > 0) {
-                    val todayBonus = DailyStreakTracker.rewardForStreakDay(profile.dailyStreak)
-                    "Today's bonus claimed (+${todayBonus.first} EXP, +${todayBonus.second} Mana). Return tomorrow for Day ${nextReward.nextDayStreak}: +${nextReward.bonusHeroExp} Hero EXP & +${nextReward.bonusMana} Mana!"
-                } else {
-                    "Play any quest, mission, or puzzle daily to earn scaling Hero EXP and Mana bonuses!"
-                },
+                text = streakDetails,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -347,6 +360,7 @@ private fun ObjectivesTabContent(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .speakOnTouch("${biome.questTitle}. ${if (unlocked) "Active" else "Needs ${biome.unlockNectar} Nectar"}. ${biome.questObjective}")
                     .testTag("quest_objective_${biome.id}")
             ) {
                 Column(
@@ -390,6 +404,8 @@ private fun ObjectivesTabContent(
                                 onClick = { onOpenBiome(biome) },
                                 modifier = Modifier
                                     .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Enter Chapter ${biome.name}")
                                     .testTag("quest_enter_${biome.id}")
                             ) {
                                 Icon(
@@ -404,6 +420,8 @@ private fun ObjectivesTabContent(
                                 onClick = { onLaunchPuzzle(biome.signaturePuzzle) },
                                 modifier = Modifier
                                     .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Play puzzle ${biome.signaturePuzzle.title}")
                                     .testTag("quest_puzzle_${biome.id}")
                             ) {
                                 Icon(
@@ -685,6 +703,10 @@ private fun DiscoveredLoreTabContent(
             ),
             modifier = Modifier
                 .fillMaxWidth()
+                .speakOnTouch(
+                    if (discovered) "${entry.title}. ${entry.chronicle}"
+                    else "Locked chronicle. ${entry.unlockHint}"
+                )
                 .testTag("lore_card_${entry.id}")
         ) {
             Column(
@@ -744,7 +766,9 @@ private fun MilestoneProgressCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .speakOnTouch("$title: $current of $target. $subtitle")
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

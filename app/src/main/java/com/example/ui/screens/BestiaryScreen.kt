@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,8 @@ import com.example.model.MythicalCreature
 import com.example.model.PuzzleType
 import com.example.stateHolder.FernfableUiState
 import com.example.ui.components.CreaturePortrait
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.FireflyGoldAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,9 +58,10 @@ import com.example.ui.theme.FireflyGoldAccent
 fun BestiaryScreen(
     uiState: FernfableUiState,
     onFeedCreature: (String) -> Unit,
-    onPlaySignaturePuzzle: (PuzzleType, Int?, Boolean) -> Unit,
+    onPlaySignaturePuzzle: (PuzzleType) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val a11y = LocalAccessibilityUi.current
     var selectedCreature by remember { mutableStateOf<MythicalCreature?>(null) }
     val discoveredCount = JungleLoreCatalog.creatures.count { creature ->
         uiState.creatureProgress[creature.id]?.discovered == true
@@ -68,16 +72,20 @@ fun BestiaryScreen(
         contentAlignment = Alignment.TopCenter
     ) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 156.dp),
+            columns = if (a11y.calmMode) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 156.dp),
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 16.dp else 12.dp)
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(modifier = Modifier.padding(bottom = 4.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .speakOnTouch("Creature Sanctuary. $discoveredCount of ${JungleLoreCatalog.creatures.size} creatures befriended.")
+                ) {
                     Text(
                         text = "Creature Sanctuary",
                         style = MaterialTheme.typography.headlineMedium
@@ -106,6 +114,10 @@ fun BestiaryScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .speakOnTouch(
+                            if (discovered) "${creature.name}, ${creature.title}. Bond level $bondLevel. Tap for details."
+                            else "Undiscovered creature. Found in ${creature.habitat}."
+                        )
                         .testTag("creature_card_${creature.id}")
                         .clickable(enabled = discovered) { selectedCreature = creature }
                 ) {
@@ -186,13 +198,16 @@ fun BestiaryScreen(
 
                 Text(
                     text = currentSelected.lore,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.speakOnTouch("${currentSelected.name}. ${currentSelected.lore}")
                 )
 
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .speakOnTouch("Habitat ${currentSelected.habitat}. Favorite treat ${currentSelected.favoriteTreat}. Bond $bondXp of $nextGoalXp.")
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
@@ -226,6 +241,8 @@ fun BestiaryScreen(
                         onClick = { onFeedCreature(currentSelected.id) },
                         modifier = Modifier
                             .weight(1f)
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Share treat for 10 Nectar")
                             .testTag("feed_creature_button")
                     ) {
                         Icon(
@@ -240,10 +257,12 @@ fun BestiaryScreen(
                     FilledTonalButton(
                         onClick = {
                             selectedCreature = null
-                            onPlaySignaturePuzzle(currentSelected.signaturePuzzle, null, true)
+                            onPlaySignaturePuzzle(currentSelected.signaturePuzzle)
                         },
                         modifier = Modifier
                             .weight(1f)
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch("Play ${currentSelected.signaturePuzzle.title}")
                             .testTag("creature_play_puzzle_button")
                     ) {
                         Icon(

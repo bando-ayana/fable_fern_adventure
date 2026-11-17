@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,13 +51,12 @@ import com.example.data.JungleLoreCatalog
 import com.example.data.RpgMissionCatalog
 import com.example.model.CommunityMission
 import com.example.model.LootItemType
-import com.example.model.MissionCompletionSummary
 import com.example.model.PuzzleType
 import com.example.model.WildCreatureTemperament
-import com.example.rpg.BattleActionType
-import com.example.rpg.RpgBattleState
 import com.example.stateHolder.FernfableUiState
 import com.example.ui.components.HeroAvatar
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -67,20 +67,14 @@ import com.example.ui.theme.StarlightVioletAccent
 @Composable
 fun MissionsScreen(
     uiState: FernfableUiState,
-    activeBattle: RpgBattleState?,
-    missionSummary: MissionCompletionSummary?,
     onStartMission: (CommunityMission) -> Unit,
-    onAdvanceCommunityStep: () -> Unit,
-    onPerformBattleAction: (BattleActionType) -> Unit,
-    onUseBattleLoot: (LootItemType) -> Unit,
-    onRetreatFromBattle: () -> Unit,
-    onDismissMissionSheet: () -> Unit,
     onRestMana: () -> Unit,
     onBrewLoot: (LootItemType) -> Unit,
     onLaunchPuzzle: (PuzzleType) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val profile = uiState.profile
+    val a11y = LocalAccessibilityUi.current
     val activeHero = JungleLoreCatalog.heroById(profile.selectedHeroId)
     val lootMap = RpgMissionCatalog.parseLootBag(profile.lootBagCsv)
     val completedMissions = profile.completedMissionIds
@@ -94,19 +88,25 @@ fun MissionsScreen(
                 .widthIn(max = 680.dp)
                 .fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 18.dp else 14.dp)
         ) {
             item {
-                Column {
+                Column(
+                    modifier = Modifier.speakOnTouch(
+                        "Community Missions and Wilds. Build Solari landmarks and battle wild creatures for XP, Magic, Mana, and Loot."
+                    )
+                ) {
                     Text(
                         text = "Community Missions & Wilds",
                         style = MaterialTheme.typography.headlineMedium
                     )
-                    Text(
-                        text = "Build Solari Canopy landmarks, battle menacing & beautiful wild creatures, and gather XP, Magic, Mana & Loot.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (!a11y.calmMode) {
+                        Text(
+                            text = "Build Solari Canopy landmarks, battle menacing & beautiful wild creatures, and gather XP, Magic, Mana & Loot.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -118,6 +118,7 @@ fun MissionsScreen(
                         border = BorderStroke(2.dp, FireflyGoldAccent),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .speakOnTouch("Sanctuary Restored! All Solari community structures stand radiant and the Shadowroot Sovereign is quelled.")
                             .testTag("game_victory_banner")
                     ) {
                         Row(
@@ -156,6 +157,9 @@ fun MissionsScreen(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .speakOnTouch(
+                            "${activeHero.name} Level ${profile.heroLevel}. Solari Community Prosperity ${profile.communityProsperity} percent. Mana ${profile.mana} of ${profile.maxMana}, Magic ${profile.magicEssence}."
+                        )
                         .testTag("community_prosperity_card")
                 ) {
                     Column(
@@ -200,58 +204,66 @@ fun MissionsScreen(
                                 label = "Mana",
                                 value = "${profile.mana}/${profile.maxMana}",
                                 tint = DewTealAccent,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("Mana ${profile.mana} of ${profile.maxMana}")
                             )
                             RpgResourceBadge(
                                 icon = Icons.Rounded.AutoAwesome,
                                 label = "Magic",
                                 value = "${profile.magicEssence} (+${profile.arcanePowerBonus})",
                                 tint = StarlightVioletAccent,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("Magic ${profile.magicEssence}, power bonus plus ${profile.arcanePowerBonus}")
                             )
                             RpgResourceBadge(
                                 icon = Icons.Rounded.Foundation,
                                 label = "Crests",
                                 value = "${lootMap[LootItemType.CANOPY_CREST] ?: 0}",
                                 tint = FireflyGoldAccent,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("${lootMap[LootItemType.CANOPY_CREST] ?: 0} Canopy Crests")
                             )
                         }
 
-                        // Built Community Landmarks summary
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            RpgMissionCatalog.communityMissions
-                                .filter { !it.isFinalExpedition }
-                                .forEach { m ->
-                                    val built = m.id in completedMissions
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = if (built) FernEmeraldAccent.copy(alpha = 0.16f)
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        // Built Community Landmarks summary (hidden in Calm View to keep card uncluttered)
+                        if (!a11y.calmMode) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                RpgMissionCatalog.communityMissions
+                                    .filter { !it.isFinalExpedition }
+                                    .forEach { m ->
+                                        val built = m.id in completedMissions
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = if (built) FernEmeraldAccent.copy(alpha = 0.16f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                         ) {
-                                            Icon(
-                                                imageVector = if (built) Icons.Rounded.CheckCircle else Icons.Rounded.Foundation,
-                                                contentDescription = null,
-                                                tint = if (built) FernEmeraldAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = m.communityProject,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (built) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (built) Icons.Rounded.CheckCircle else Icons.Rounded.Foundation,
+                                                    contentDescription = null,
+                                                    tint = if (built) FernEmeraldAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = m.communityProject,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (built) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                     }
-                                }
+                            }
                         }
 
                         // Battle Satchel & Sanctuary Preparation
@@ -267,17 +279,23 @@ fun MissionsScreen(
                             LootCounterChip(
                                 name = "Tonic",
                                 count = lootMap[LootItemType.SUNBERRY_TONIC] ?: 0,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("Sunberry Tonic, quantity ${lootMap[LootItemType.SUNBERRY_TONIC] ?: 0}")
                             )
                             LootCounterChip(
                                 name = "Mana Vial",
                                 count = lootMap[LootItemType.MANA_VIAL] ?: 0,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("Mana Vial, quantity ${lootMap[LootItemType.MANA_VIAL] ?: 0}")
                             )
                             LootCounterChip(
                                 name = "Sunfire",
                                 count = lootMap[LootItemType.SUNFIRE_CHARM] ?: 0,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .speakOnTouch("Sunfire Charm, quantity ${lootMap[LootItemType.SUNFIRE_CHARM] ?: 0}")
                             )
                         }
 
@@ -290,6 +308,8 @@ fun MissionsScreen(
                                 enabled = profile.mana < profile.maxMana,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch(if (profile.mana < profile.maxMana) "Refill Mana at sanctuary" else "Mana is already full")
                                     .testTag("rest_mana_button")
                             ) {
                                 Icon(
@@ -305,6 +325,8 @@ fun MissionsScreen(
                                 enabled = profile.nectar >= 12,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .speakOnTouch("Brew Sunberry Tonic using 12 Nectar")
                                     .testTag("brew_tonic_button")
                             ) {
                                 Icon(
@@ -384,6 +406,7 @@ private fun MissionCard(
     onAccessPuzzle: (() -> Unit)?
 ) {
     val opponent = mission.opponent
+    val a11y = LocalAccessibilityUi.current
     val isBeautiful = opponent.temperament == WildCreatureTemperament.BEAUTIFUL
     val temperamentColor = if (isBeautiful) StarlightVioletAccent else OrchidCoralAccent
 
@@ -402,11 +425,14 @@ private fun MissionCard(
         ),
         modifier = Modifier
             .fillMaxWidth()
+            .speakOnTouch(
+                "${mission.title}. Wild creature: ${opponent.name}. Builds ${mission.communityProject}. Rewards experience, magic, mana, and loot."
+            )
             .testTag("mission_card_${mission.id}")
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(if (a11y.calmMode) 16.dp else 14.dp),
+            verticalArrangement = Arrangement.spacedBy(if (a11y.calmMode) 10.dp else 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -476,7 +502,11 @@ private fun MissionCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "+${opponent.rewardExp} XP · +${opponent.rewardMagic} Magic · +${opponent.rewardMana} Mana · ${opponent.guaranteedLoot.displayName}",
+                    text = if (a11y.calmMode) {
+                        "Rewards: XP, Magic, Mana & ${opponent.guaranteedLoot.displayName}"
+                    } else {
+                        "+${opponent.rewardExp} XP · +${opponent.rewardMagic} Magic · +${opponent.rewardMana} Mana · ${opponent.guaranteedLoot.displayName}"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -484,10 +514,17 @@ private fun MissionCard(
             }
 
             if (isUnlocked) {
+                val embarkLabel = when {
+                    mission.isFinalExpedition && !isCompleted -> "Final Expedition (Rec. Lv.${mission.recommendedLevel})"
+                    isCompleted -> "Patrol Again (Lv.${mission.recommendedLevel})"
+                    else -> "Embark on Mission (Rec. Lv.${mission.recommendedLevel})"
+                }
                 Button(
                     onClick = onEmbark,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .speakOnTouch(embarkLabel)
                         .testTag("embark_mission_${mission.id}")
                 ) {
                     Icon(
@@ -496,21 +533,22 @@ private fun MissionCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            mission.isFinalExpedition && !isCompleted -> "Final Expedition (Rec. Lv.${mission.recommendedLevel})"
-                            isCompleted -> "Patrol Again (Lv.${mission.recommendedLevel})"
-                            else -> "Embark on Mission (Rec. Lv.${mission.recommendedLevel})"
-                        }
-                    )
+                    Text(text = embarkLabel)
                 }
 
                 val puzzle = mission.puzzleChallenge
                 if (puzzle != null && onAccessPuzzle != null) {
+                    val puzzleLabel = if (puzzleAccessed) {
+                        "Mission Puzzle: ${puzzle.title} (Accessed)"
+                    } else {
+                        "Access Puzzle: ${puzzle.title}"
+                    }
                     OutlinedButton(
                         onClick = onAccessPuzzle,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .speakOnTouch(puzzleLabel)
                             .testTag("mission_puzzle_${mission.id}")
                     ) {
                         Icon(
@@ -519,13 +557,7 @@ private fun MissionCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (puzzleAccessed) {
-                                "Mission Puzzle: ${puzzle.title} (Accessed)"
-                            } else {
-                                "Access Puzzle: ${puzzle.title}"
-                            }
-                        )
+                        Text(text = puzzleLabel)
                     }
                 }
             } else {

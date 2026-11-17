@@ -51,6 +51,8 @@ import com.example.puzzle.FernMosaicPuzzle
 import com.example.puzzle.LeafShape
 import com.example.puzzle.LeafTint
 import com.example.puzzle.LeafToken
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.speakOnTouch
 import com.example.ui.theme.DewTealAccent
 import com.example.ui.theme.FernEmeraldAccent
 import com.example.ui.theme.FireflyGoldAccent
@@ -67,25 +69,40 @@ fun FernMosaicView(
 ) {
     val round = puzzle.currentRound ?: return
 
-    val pulseTransition = rememberInfiniteTransition(label = "mosaic_slot_pulse")
-    val selectedPulse by pulseTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "mosaic_selected_pulse"
-    )
+    val a11y = LocalAccessibilityUi.current
+    val selectedPulse = if (a11y.calmMode) {
+        1.0f
+    } else {
+        val pulseTransition = rememberInfiniteTransition(label = "mosaic_slot_pulse")
+        val animated by pulseTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "mosaic_selected_pulse"
+        )
+        animated
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val headerSpeech = buildString {
+            append("Pattern ${round.roundNumber} of ${round.totalRounds}.")
+            if (gentleMode) {
+                append(" ")
+                append(statusMessage ?: round.patternHint)
+            }
+        }
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (a11y.calmMode) 0.92f else 0.7f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .speakOnTouch(headerSpeech)
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
@@ -124,9 +141,12 @@ fun FernMosaicView(
                 (fadeIn(tween(240)) + scaleIn(initialScale = 0.94f)) togetherWith fadeOut(tween(160))
             },
             label = "mosaic_round_transition"
-        ) { _ ->
-            val columns = if (round.sequence.size == 6) 3 else 4
-            val rows = round.sequence.chunked(columns)
+        ) { targetRound ->
+            val currentRound = puzzle.rounds.firstOrNull { it.roundNumber == targetRound } ?: round
+
+            // render based on currentRound
+            val columns = if (currentRound.sequence.size <= 6) 3 else 4
+            val rows = currentRound.sequence.chunked(columns)
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(
@@ -176,6 +196,12 @@ fun FernMosaicView(
                                         label = "mosaic_placed_scale_$seqIdx"
                                     )
 
+                                    val slotSpeech = when {
+                                        isMissing && placed != null -> "Placed ${placed.tint.name.lowercase()} ${placed.shape.label}"
+                                        isMissing -> "Missing slot${if (isSelectedSlot) ", selected" else ""}"
+                                        else -> "${token.tint.name.lowercase()} ${token.shape.label}"
+                                    }
+
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
                                         color = slotBg,
@@ -187,6 +213,7 @@ fun FernMosaicView(
                                             .weight(1f)
                                             .aspectRatio(1f)
                                             .scale(if (isSelectedSlot && placed == null) selectedPulse else placedScale)
+                                            .speakOnTouch(slotSpeech)
                                             .testTag("mosaic_slot_$seqIdx")
                                             .clickable(enabled = isMissing && placed == null) {
                                                 onSelectSlot(seqIdx)
@@ -249,6 +276,7 @@ fun FernMosaicView(
                             modifier = Modifier
                                 .weight(1f)
                                 .aspectRatio(0.92f)
+                                .speakOnTouch("${choice.tint.name.lowercase()} ${choice.shape.label}${if (choice.tilted) ", tilted" else ""}")
                                 .testTag("mosaic_choice_$idx")
                                 .clickable { onSelectChoice(choice) }
                         ) {

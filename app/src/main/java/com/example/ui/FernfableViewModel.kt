@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class FernfableViewModel(
     private val repository: GameRepository,
@@ -365,7 +366,7 @@ class FernfableViewModel(
                     statusBanner = "Round ${round.roundNumber} of ${round.totalRounds} — Watch closely!"
                 )
             }
-            delay(450L)
+            delay(450L.milliseconds)
             val pulseMs = when (_selectedDifficulty.value) {
                 DifficultyTier.SPROUT -> 460L
                 DifficultyTier.EXPLORER -> 380L
@@ -373,9 +374,9 @@ class FernfableViewModel(
             }
             for (blossomIdx in round.sequence) {
                 _fireflyState.update { it.copy(activeBlossomIdx = blossomIdx) }
-                delay(pulseMs)
+                delay(pulseMs.milliseconds)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
-                delay(180L)
+                delay(180L.milliseconds)
             }
             _fireflyState.update {
                 it.copy(
@@ -402,7 +403,7 @@ class FernfableViewModel(
             val nextInput = state.userInput + index
             viewModelScope.launch {
                 _fireflyState.update { it.copy(activeBlossomIdx = index) }
-                delay(160L)
+                delay(160L.milliseconds)
                 _fireflyState.update { it.copy(activeBlossomIdx = null) }
             }
 
@@ -434,7 +435,7 @@ class FernfableViewModel(
                         )
                     }
                     viewModelScope.launch {
-                        delay(550L)
+                        delay(550L.milliseconds)
                         playFireflySequence()
                     }
                 }
@@ -462,7 +463,7 @@ class FernfableViewModel(
                         }
                     )
                 }
-                delay(550L)
+                delay(550L.milliseconds)
                 _fireflyState.update { it.copy(errorFlashIdx = null) }
                 playFireflySequence()
             }
