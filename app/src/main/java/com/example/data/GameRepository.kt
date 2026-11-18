@@ -1,8 +1,11 @@
 package com.example.data
 
 import android.content.Context
-import com.example.R
+import androidx.room.withTransaction
 import com.example.data.local.CreatureProgressEntity
+import com.example.data.local.FernfableDatabase
+import com.example.data.local.LocalPuzzleProgressEntity
+import com.example.data.local.PendingPuzzleCompletionEntity
 import com.example.data.local.PlayerProfileEntity
 import com.example.data.local.PuzzleStatsEntity
 import com.example.data.remote.FirestoreCreatureProgress
@@ -28,17 +31,205 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
-class GameRepository(private val db: FirebaseFirestore) {
+class GameRepository(
+    private val db: FirebaseFirestore,
+    private val localDatabase: FernfableDatabase,
+    private val context: Context
+) {
     var requestManualRetry: (suspend (operation: String, error: String) -> Boolean)? = null
 
-    constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(
-            context.applicationContext.getString(R.string.firestore_database_id)
+    suspend fun recordPuzzleSolvedLocally(
+        userId: String,
+        puzzleType: PuzzleType,
+        difficulty: DifficultyTier,
+        levelPlayed: Int,
+        starsEarned: Int,
+        rawScore: Int,
+        cloudStats: PuzzleStatsEntity?
+    ): PuzzleCompletionResult {
+        val now = System.currentTimeMillis()
+
+        val updated = localDatabase.withTransaction {
+            val dao = localDatabase.gameDao()
+            val previous = dao.getLocalPuzzleProgress(userId, puzzleType.id)
+
+            val priorBestScore = maxOf(
+                previous?.bestScore ?: 0,
+                cloudStats?.bestScore ?: 0
+            )
+            val nextLevel = maxOf(
+                previous?.currentLevel ?: 1,
+                cloudStats?.currentLevel ?: 1,
+                levelPlayed + 1
+            )
+
+            val progress = LocalPuzzleProgressEntity(
+                userId = userId,
+                puzzleType = puzzleType.id,
+                accessed = true,
+                currentLevel = nextLevel,
+                totalStars = maxOf(previous?.totalStars ?: 0, cloudStats?.totalStars ?: 0) +
+                        starsEarned,
+                playedCount = maxOf(previous?.playedCount ?: 0, cloudStats?.playedCount ?: 0) +
+                        1,
+                solvedCount = maxOf(previous?.solvedCount ?: 0, cloudStats?.solvedCount ?: 0) +
+                        1,
+                bestScore = maxOf(priorBestScore, rawScore),
+                bestStreak = maxOf(previous?.bestStreak ?: 0, cloudStats?.bestStreak ?: 0),
+                lastSolvedMillis = now
+            )
+
+            dao.upsertLocalPuzzleProgress(progress)
+            dao.insertPendingCompletion(
+                PendingPuzzleCompletionEntity(
+                    eventId = UUID.randomUUID().toString(),
+                    userId = userId,
+                    puzzleType = puzzleType.id,
+                    difficulty = difficulty.name,
+                    levelPlayed = levelPlayed,
+                    starsEarned = starsEarned,
+                    rawScore = rawScore,
+                    completedAtMillis = now
+                )
+            )
+            progress to priorBestScore
+        }
+
+        enqueuePuzzleCompletionSync(userId)
+
+        return PuzzleCompletionResult(
+            puzzleType = puzzleType,
+            difficulty = difficulty,
+            completedLevel = levelPlayed,
+            nextLevelUnlocked = updated.first.currentLevel,
+            starsEarned = starsEarned,
+            score = rawScore,
+            nectarEarned = 0,
+            moonstonesEarned = 0,
+            skillXpEarned = 0,
+            newBestScore = rawScore > updated.second
         )
-    )
+    }
+
+    private fun enqueuePuzzleCompletionSync(userId: String) {
+        PuzzleCompletionSyncWorker.enqueue(context, userId)
+    }
+
+    suspend fun syncPendingPuzzleCompletions(userId: String) {
+        ensureSeeded(userId)
+
+        val dao = localDatabase.gameDao()
+        val pending = dao.getPendingCompletions(userId)
+
+        for ((eventId, _, puzzleType1, difficulty1, levelPlayed, starsEarned, rawScore, completedAtMillis) in pending) {
+            val puzzleType = PuzzleType.fromId(puzzleType1)
+            val difficulty = DifficultyTier.entries.firstOrNull {
+                it.name == difficulty1
+            } ?: throw IllegalStateException("Unknown puzzle difficulty: $difficulty1")
+
+            val profileRef = userDocRef(userId)
+            val statsRef = puzzleStatsCollection(userId).document(puzzleType1)
+            val receiptRef = profileRef
+                .collection("puzzle_completions")
+                .document(eventId)
+
+            db.runTransaction { transaction ->
+                if (transaction.get(receiptRef).exists()) {
+                    return@runTransaction false
+                }
+
+                val profile = transaction.get(profileRef)
+                    .toObject(FirestoreUserProfile::class.java)
+                    ?.toEntity()
+                    ?: PlayerProfileEntity()
+
+                val stats = transaction.get(statsRef)
+                    .toObject(FirestorePuzzleStats::class.java)
+                    ?.toEntity()
+                    ?: PuzzleStatsEntity(puzzleType = puzzleType1)
+
+                val hero = JungleLoreCatalog.heroById(profile.selectedHeroId)
+                val relic = JungleLoreCatalog.relicById(profile.equippedRelicId)
+                val nectar = (
+                        (puzzleType.baseNectarReward + levelPlayed * 2) *
+                                difficulty.rewardMultiplier
+                        ).roundToInt() + hero.bonusNectarPerPuzzle + relic.bonusNectar
+                val moonstones =
+                    if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
+                val skillXp = difficulty.xpBonus +
+                        starsEarned * 5 +
+                        (rawScore / 25).coerceAtMost(20) +
+                        hero.bonusSkillXp
+                val (heroLevel, heroExp) = applyHeroExp(
+                    profile.heroLevel,
+                    profile.heroExp,
+                    35 + starsEarned * 10
+                )
+                val streak = profile.currentStreak + 1
+                val nextLevel = maxOf(stats.currentLevel, levelPlayed + 1)
+
+                val profileUpdates = mutableMapOf<String, Any>(
+                    "heroLevel" to heroLevel,
+                    "heroExp" to heroExp,
+                    "nectar" to profile.nectar + nectar,
+                    "moonstones" to profile.moonstones + moonstones,
+                    "currentStreak" to streak,
+                    "bestStreak" to maxOf(profile.bestStreak, streak),
+                    "totalPuzzlesSolved" to profile.totalPuzzlesSolved + 1,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                when (puzzleType.skill) {
+                    BrainSkill.MEMORY ->
+                        profileUpdates["memoryXp"] = profile.memoryXp + skillXp
+                    BrainSkill.LOGIC ->
+                        profileUpdates["logicXp"] = profile.logicXp + skillXp
+                    BrainSkill.SPATIAL ->
+                        profileUpdates["spatialXp"] = profile.spatialXp + skillXp
+                    BrainSkill.DEDUCTION ->
+                        profileUpdates["deductionXp"] = profile.deductionXp + skillXp
+                    BrainSkill.OBSERVATION ->
+                        profileUpdates["observationXp"] = profile.observationXp + skillXp
+                }
+
+                transaction.update(profileRef, profileUpdates)
+                transaction.update(
+                    statsRef,
+                    mapOf(
+                        "accessed" to true,
+                        "currentLevel" to nextLevel,
+                        "totalStars" to stats.totalStars + starsEarned,
+                        "playedCount" to stats.playedCount + 1,
+                        "solvedCount" to stats.solvedCount + 1,
+                        "bestScore" to maxOf(stats.bestScore, rawScore),
+                        "bestStreak" to maxOf(stats.bestStreak, streak),
+                        "lastSolvedMillis" to completedAtMillis,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                transaction.set(
+                    receiptRef,
+                    mapOf(
+                        "userId" to userId,
+                        "eventId" to eventId,
+                        "puzzleType" to puzzleType1,
+                        "levelPlayed" to levelPlayed,
+                        "starsEarned" to starsEarned,
+                        "rawScore" to rawScore,
+                        "completedAtMillis" to completedAtMillis,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                true
+            }.await()
+
+            // Delete only after the transaction succeeds. The receipt makes retries idempotent.
+            dao.deletePendingCompletion(eventId)
+        }
+    }
 
     private fun userDocRef(userId: String) = db.collection("users").document(userId)
 

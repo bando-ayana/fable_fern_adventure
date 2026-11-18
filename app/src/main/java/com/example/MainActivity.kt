@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.GameRepository
+import com.example.data.local.FernfableDatabase
 import com.example.ui.FernfableApp
 import com.example.ui.FernfableViewModel
 import com.example.ui.components.ProvideFernfableAccessibility
@@ -81,7 +82,7 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                         val databaseId = app.getString(R.string.firestore_database_id)
                         val db = FirebaseFirestore.getInstance(databaseId)
                         FernfableViewModel(
-                            repository = GameRepository(db),
+                            repository = GameRepository(db, FernfableDatabase.getInstance(app), app),
                             currentUserId = user.uid,
                             userDisplayName = user.displayName,
                             userEmail = user.email

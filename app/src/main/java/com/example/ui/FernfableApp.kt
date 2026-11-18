@@ -40,8 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
@@ -60,6 +60,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.R
 import com.example.audio.AudioScene
 import com.example.audio.FernfableAudioManager
+import com.example.model.PuzzleCompletionResult
 import com.example.model.PuzzleType
 import com.example.navigation.FernfableRoutes
 import com.example.navigation.TopDestination
@@ -154,6 +155,9 @@ private fun FernfableAppShell(
     val audioManager = remember(context.applicationContext) {
         FernfableAudioManager(context.applicationContext)
     }
+    val completionResult by viewModel.completionResult.collectAsStateWithLifecycle()
+    val isIntroShrinePuzzle by
+    viewModel.isIntroShrinePuzzle.collectAsStateWithLifecycle()
 
     DisposableEffect(lifecycleOwner, audioManager) {
         val observer = LifecycleEventObserver { _, event ->
@@ -167,6 +171,17 @@ private fun FernfableAppShell(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             audioManager.release()
+        }
+    }
+
+    LaunchedEffect(completionResult, isIntroShrinePuzzle, currentRoute) {
+        if (
+            completionResult != null &&
+            isIntroShrinePuzzle &&
+            currentRoute == FernfableRoutes.PLAY_PUZZLE
+        ) {
+            viewModel.dismissCompletion()
+            navController.popBackStack()
         }
     }
 
@@ -216,7 +231,8 @@ private fun FernfableAppShell(
         backStackEntry,
         navController,
         uiState,
-        audioManager
+        audioManager,
+        completionResult
     )
 }
 
@@ -232,7 +248,8 @@ fun JungleAtmosphereBackground(
     backStackEntry: NavBackStackEntry?,
     navController: NavHostController,
     uiState: FernfableUiState,
-    audioManager: FernfableAudioManager
+    audioManager: FernfableAudioManager,
+    completionResult: PuzzleCompletionResult?
 ) {
     val activeEncounter by viewModel.activeEncounter.collectAsStateWithLifecycle()
     val encounterFeedback by viewModel.encounterFeedback.collectAsStateWithLifecycle()
@@ -249,7 +266,6 @@ fun JungleAtmosphereBackground(
     val selectedGridCell by viewModel.selectedGridCell.collectAsStateWithLifecycle()
     val vineWeaverState by viewModel.vineWeaverState.collectAsStateWithLifecycle()
     val spiritLockState by viewModel.spiritLockState.collectAsStateWithLifecycle()
-    val completionResult by viewModel.completionResult.collectAsStateWithLifecycle()
     val activeBattle by viewModel.activeBattle.collectAsStateWithLifecycle()
     val missionSummary by viewModel.missionSummary.collectAsStateWithLifecycle()
     val worldState by viewModel.worldState.collectAsStateWithLifecycle()
@@ -257,9 +273,11 @@ fun JungleAtmosphereBackground(
     val isProfileLoaded by viewModel.isProfileLoaded.collectAsStateWithLifecycle()
     val isRecordingMissionReward by viewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
-    val isInOnboarding = !isProfileLoaded || !uiState.profile.introCompleted
+    val introCompletedLocally by
+    viewModel.introCompletedLocally.collectAsStateWithLifecycle()
+    val isInOnboarding = !isProfileLoaded || (!uiState.profile.introCompleted && !introCompletedLocally)
     val introState by viewModel.introState.collectAsStateWithLifecycle()
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val screenWidthDp = LocalWindowInfo.current.containerSize.width
     val useRail = screenWidthDp >= 600
     val pendingDatabaseRetry by
     viewModel.pendingDatabaseRetry.collectAsStateWithLifecycle()
@@ -351,7 +369,7 @@ fun JungleAtmosphereBackground(
                             ) {
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             }
-                        } else if (!uiState.profile.introCompleted) {
+                        } else if (!uiState.profile.introCompleted && !introCompletedLocally) {
                             if (introState.stage == IntroStage.CUTSCENE) {
                                 OpeningCutsceneScreen(
                                     page = introState.cutscenePage,

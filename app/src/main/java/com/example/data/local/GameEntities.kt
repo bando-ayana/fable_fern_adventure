@@ -93,3 +93,32 @@ data class PuzzleStatsEntity(
     val bestStreak: Int = 0,
     val lastSolvedMillis: Long = 0L
 )
+
+@Entity(
+    tableName = "local_puzzle_progress",
+    primaryKeys = ["userId", "puzzleType"]
+)
+data class LocalPuzzleProgressEntity(
+    val userId: String,
+    val puzzleType: String,
+    val accessed: Boolean = true,
+    val currentLevel: Int = 1,
+    val totalStars: Int = 0,
+    val playedCount: Int = 0,
+    val solvedCount: Int = 0,
+    val bestScore: Int = 0,
+    val bestStreak: Int = 0,
+    val lastSolvedMillis: Long = 0L
+)
+
+@Entity(tableName = "pending_puzzle_completions")
+data class PendingPuzzleCompletionEntity(
+    @PrimaryKey val eventId: String,
+    val userId: String,
+    val puzzleType: String,
+    val difficulty: String,
+    val levelPlayed: Int,
+    val starsEarned: Int,
+    val rawScore: Int,
+    val completedAtMillis: Long
+)

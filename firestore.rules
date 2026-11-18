@@ -133,6 +133,46 @@ service cloud.firestore {
 
       allow delete: if isOwner(userId) && isValidId(userId);
 
+      match /puzzle_completions/{eventId} {
+        allow get: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(eventId);
+
+        allow list: if false;
+
+        allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(eventId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().eventId == eventId &&
+        incoming().puzzleType is string &&
+        isValidId(incoming().puzzleType) &&
+        incoming().levelPlayed is int &&
+        incoming().levelPlayed >= 1 &&
+        incoming().levelPlayed <= 9999 &&
+        incoming().starsEarned is int &&
+        incoming().starsEarned >= 1 &&
+        incoming().starsEarned <= 3 &&
+        incoming().rawScore is int &&
+        incoming().rawScore >= 0 &&
+        incoming().rawScore <= 10000000 &&
+        incoming().completedAtMillis is int &&
+        incoming().completedAtMillis >= 0 &&
+        incoming().createdAt is timestamp &&
+        incoming().createdAt <= request.time &&
+        incoming().keys().hasAll([
+          'userId', 'eventId', 'puzzleType', 'levelPlayed',
+          'starsEarned', 'rawScore', 'completedAtMillis', 'createdAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'eventId', 'puzzleType', 'levelPlayed',
+          'starsEarned', 'rawScore', 'completedAtMillis', 'createdAt'
+        ]) &&
+        existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update, delete: if false;
+      }
+
       match /creatures/{creatureId} {
         allow get: if isOwner(userId) && isValidId(userId) && isValidId(creatureId);
         allow list: if isOwner(userId) && isValidId(userId);

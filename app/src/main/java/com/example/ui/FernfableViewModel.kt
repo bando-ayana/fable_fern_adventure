@@ -156,6 +156,12 @@ class FernfableViewModel(
     private val _completionResult = MutableStateFlow<PuzzleCompletionResult?>(null)
     val completionResult: StateFlow<PuzzleCompletionResult?> = _completionResult.asStateFlow()
 
+    private val _isIntroShrinePuzzle = MutableStateFlow(false)
+    val isIntroShrinePuzzle: StateFlow<Boolean> = _isIntroShrinePuzzle.asStateFlow()
+
+    private val _introCompletedLocally = MutableStateFlow(false)
+    val introCompletedLocally: StateFlow<Boolean> = _introCompletedLocally.asStateFlow()
+
     // RPG Community Missions & Wild Creature Battle state
     private val _activeBattle = MutableStateFlow<RpgBattleState?>(null)
     val activeBattle: StateFlow<RpgBattleState?> = _activeBattle.asStateFlow()
@@ -300,6 +306,11 @@ class FernfableViewModel(
         val level = (levelOverride ?: currentSavedLevel).coerceAtLeast(1)
         _activePuzzleLevel.value = level
 
+        _isIntroShrinePuzzle.value =
+            type == PuzzleType.FIREFLY_ECHO &&
+                    !uiState.value.profile.introCompleted &&
+                    _introState.value.stage == IntroStage.LESSON_PUZZLE_SHRINE
+
         if (accessedFromRpg && existingStats?.accessed != true) {
             viewModelScope.launch {
                 runRepositoryAction {
@@ -359,6 +370,7 @@ class FernfableViewModel(
 
     fun dismissCompletion() {
         _completionResult.value = null
+        _isIntroShrinePuzzle.value = false
     }
 
     // --- 1. Firefly Echo Actions ---
@@ -773,13 +785,14 @@ class FernfableViewModel(
     private fun completeActivePuzzle(type: PuzzleType, rawScore: Int, starsEarned: Int) {
         viewModelScope.launch {
             runRepositoryAction {
-                val result = repository.recordPuzzleSolved(
+                val result = repository.recordPuzzleSolvedLocally(
                     userId = currentUserId,
                     puzzleType = type,
                     difficulty = _selectedDifficulty.value,
                     levelPlayed = _activePuzzleLevel.value,
                     starsEarned = starsEarned,
-                    rawScore = rawScore
+                    rawScore = rawScore,
+                    cloudStats = uiState.value.puzzleStats[type]
                 )
                 _completionResult.value = result
                 if (!uiState.value.profile.introCompleted &&
@@ -830,6 +843,8 @@ class FernfableViewModel(
     }
 
     fun skipIntroTutorial() {
+        _introCompletedLocally.value = true
+
         viewModelScope.launch {
             runRepositoryAction {
                 repository.markIntroCompleted(currentUserId, bonusNectar = 0)
@@ -838,6 +853,8 @@ class FernfableViewModel(
     }
 
     fun completeIntroGraduation() {
+        _introCompletedLocally.value = true
+
         viewModelScope.launch {
             runRepositoryAction {
                 repository.markIntroCompleted(currentUserId, bonusNectar = 20)
@@ -1178,34 +1195,63 @@ class FernfableViewModel(
     }
 
     private fun finalizeMissionBattle(finalState: RpgBattleState) {
+        val victory = finalState.phase == BattlePhase.VICTORY
+        val isIntroBattle = finalState.mission.id == RpgMissionCatalog.introMission.id
+
+        if (victory && isIntroBattle) {
+            _introState.update { cur ->
+                val nextStage = IntroTutorialEngine.computeStage(
+                    inCutscene = false,
+                    lanternLit = cur.lanternLit,
+                    shrinePuzzleSolved = cur.shrinePuzzleSolved,
+                    sproutlingDefeated = true
+                )
+                cur.copy(
+                    stage = nextStage,
+                    sproutlingDefeated = true,
+                    worldState = RpgWorldEngine.applyBattleCooldownAll(cur.worldState)
+                )
+            }
+
+            _missionSummary.value = MissionCompletionSummary(
+                mission = finalState.mission,
+                victory = true,
+                calmedSpirit = finalState.calmedSpirit,
+                expGained = 0,
+                leveledUpTo = null,
+                magicGained = 0,
+                manaGained = 0,
+                nectarGained = 0,
+                moonstonesGained = 0,
+                prosperityGained = 0,
+                lootEarned = emptyList(),
+                gameBeatenJustNow = false
+            )
+        }
+        updateRepository(finalState, victory)
+    }
+
+    private fun updateRepository(finalState: RpgBattleState, victory: Boolean) {
         viewModelScope.launch {
-            runRepositoryAction {
+            _isRecordingMissionRewards.value = true
+            try {
                 val summary = repository.recordMissionOutcome(
                     userId = currentUserId,
                     mission = finalState.mission,
-                    victory = finalState.phase == BattlePhase.VICTORY,
+                    victory = victory,
                     calmedSpirit = finalState.calmedSpirit,
                     remainingMana = finalState.heroMana,
                     usedLootInBattle = finalState.usedLootInBattle
                 )
                 _missionSummary.value = summary
-                if (finalState.phase == BattlePhase.VICTORY &&
-                    finalState.mission.id == RpgMissionCatalog.introMission.id
-                ) {
-                    _introState.update { cur ->
-                        val nextStage = IntroTutorialEngine.computeStage(
-                            inCutscene = false,
-                            lanternLit = cur.lanternLit,
-                            shrinePuzzleSolved = cur.shrinePuzzleSolved,
-                            sproutlingDefeated = true
-                        )
-                        cur.copy(
-                            stage = nextStage,
-                            sproutlingDefeated = true,
-                            worldState = RpgWorldEngine.applyBattleCooldownAll(cur.worldState)
-                        )
-                    }
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Mission outcome cloud save failed", e)
+                _snackbarMessage.value =
+                    "Victory counted for this intro. Cloud rewards were not saved; you can continue playing."
+            } finally {
+                _isRecordingMissionRewards.value = false
             }
         }
     }

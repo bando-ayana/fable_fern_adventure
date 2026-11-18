@@ -9,9 +9,11 @@ import androidx.room.RoomDatabase
     entities = [
         PlayerProfileEntity::class,
         CreatureProgressEntity::class,
-        PuzzleStatsEntity::class
+        PuzzleStatsEntity::class,
+        LocalPuzzleProgressEntity::class,
+        PendingPuzzleCompletionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class FernfableDatabase : RoomDatabase() {
