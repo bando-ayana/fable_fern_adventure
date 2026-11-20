@@ -1235,13 +1235,14 @@ class FernfableViewModel(
         viewModelScope.launch {
             _isRecordingMissionRewards.value = true
             try {
-                val summary = repository.recordMissionOutcome(
+                val summary = repository.queueMissionOutcomeLocally(
                     userId = currentUserId,
                     mission = finalState.mission,
                     victory = victory,
                     calmedSpirit = finalState.calmedSpirit,
                     remainingMana = finalState.heroMana,
-                    usedLootInBattle = finalState.usedLootInBattle
+                    usedLootInBattle = finalState.usedLootInBattle,
+                    profile = uiState.value.profile
                 )
                 _missionSummary.value = summary
             } catch (e: CancellationException) {
@@ -1249,7 +1250,7 @@ class FernfableViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "Mission outcome cloud save failed", e)
                 _snackbarMessage.value =
-                    "Victory counted for this intro. Cloud rewards were not saved; you can continue playing."
+                    "Mission could not be saved on this device but will retry again on next mission completion."
             } finally {
                 _isRecordingMissionRewards.value = false
             }

@@ -59,6 +59,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import com.example.BuildConfig
 import com.example.R
 import com.example.ui.components.ComfortAccessibilityBar
 import com.example.ui.components.JungleAtmosphereBackground
@@ -120,7 +121,10 @@ fun AuthScreen(
         } catch (e: CancellationException) {
             throw e
         } catch (e: NoCredentialException) {
-            Log.d(AUTH_TAG, "No authorized Google credentials found for silent sign-in ${e.message}")
+            Log.d(
+                AUTH_TAG,
+                "No authorized Google credentials found for silent sign-in ${e.message}"
+            )
         } catch (e: GetCredentialCancellationException) {
             Log.d(AUTH_TAG, "Silent Google sign-in cancelled: ${e.message}")
         } catch (e: Exception) {
@@ -156,13 +160,34 @@ fun AuthScreen(
                 throw e
             } catch (e: GetCredentialCancellationException) {
                 Log.w(AUTH_TAG, "Google Sign-In cancelled or dismissed: ${e.message}", e)
-                statusMessage = "Sign-in was cancelled. Select a Google account whenever you're ready."
+                statusMessage =
+                    "Sign-in was cancelled. Select a Google account whenever you're ready."
             } catch (e: GetCredentialException) {
                 Log.e(AUTH_TAG, "Google Sign-In credential failure", e)
-                statusMessage = e.localizedMessage ?: "Couldn't complete Google Sign-In. Please try again."
+                statusMessage =
+                    e.localizedMessage ?: "Couldn't complete Google Sign-In. Please try again."
             } catch (e: Exception) {
                 Log.e(AUTH_TAG, "Firebase Google Auth failure", e)
                 statusMessage = e.localizedMessage ?: "Authentication failed. Please try again."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun launchAnonymousSignIn() {
+        if (isLoading) return
+        scope.launch {
+            isLoading = true
+            statusMessage = null
+            try {
+                Firebase.auth.signInAnonymously().await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(AUTH_TAG, "Anonymous sign-in failed", e)
+                statusMessage =
+                    e.localizedMessage ?: "Couldn't sign in anonymously. Please try again."
             } finally {
                 isLoading = false
             }
@@ -251,7 +276,10 @@ fun AuthScreen(
                             shape = RoundedCornerShape(26.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.96f),
                             tonalElevation = if (calmMode) 2.dp else 4.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .speakOnTouch(
@@ -354,6 +382,19 @@ fun AuthScreen(
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
+                                    }
+                                }
+
+                                if (BuildConfig.DEBUG) {
+                                    Button(
+                                        onClick = ::launchAnonymousSignIn,
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(54.dp)
+                                    ) {
+                                        Text("Continue anonymously (debug)")
                                     }
                                 }
                             }

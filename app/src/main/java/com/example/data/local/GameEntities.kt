@@ -122,3 +122,14 @@ data class PendingPuzzleCompletionEntity(
     val rawScore: Int,
     val completedAtMillis: Long
 )
+@Entity(tableName = "pending_mission_outcomes")
+data class PendingMissionOutcomeEntity(
+    @PrimaryKey val eventId: String,
+    val userId: String,
+    val missionId: String,
+    val victory: Boolean,
+    val calmedSpirit: Boolean,
+    val remainingMana: Int,
+    val usedLootCsv: String,
+    val completedAtMillis: Long
+)
