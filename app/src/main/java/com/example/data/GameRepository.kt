@@ -5,7 +5,6 @@ import androidx.room.withTransaction
 import com.example.data.local.CreatureProgressEntity
 import com.example.data.local.FernfableDatabase
 import com.example.data.local.LocalPuzzleProgressEntity
-import com.example.data.local.PendingMissionOutcomeEntity
 import com.example.data.local.PendingPuzzleCompletionEntity
 import com.example.data.local.PlayerProfileEntity
 import com.example.data.local.PuzzleStatsEntity
@@ -26,6 +25,8 @@ import com.example.rpg.DailyStreakTracker
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -120,315 +121,115 @@ class GameRepository(
         PuzzleCompletionSyncWorker.enqueue(context, userId)
     }
 
-    suspend fun queueMissionOutcomeLocally(
-        userId: String,
-        mission: CommunityMission,
-        victory: Boolean,
-        calmedSpirit: Boolean,
-        remainingMana: Int,
-        usedLootInBattle: Map<LootItemType, Int>,
-        profile: PlayerProfileEntity
-    ): MissionCompletionSummary {
-        val event = PendingMissionOutcomeEntity(
-            eventId = UUID.randomUUID().toString(),
-            userId = userId,
-            missionId = mission.id,
-            victory = victory,
-            calmedSpirit = calmedSpirit,
-            remainingMana = remainingMana,
-            usedLootCsv = RpgMissionCatalog.serializeLootBag(usedLootInBattle),
-            completedAtMillis = System.currentTimeMillis()
-        )
-
-        saveRoomEventAndScheduleSync(
-            event = event,
-            saveToRoom = { localDatabase.gameDao().insertPendingMissionOutcome(it) },
-            scheduleSync = { PuzzleCompletionSyncWorker.enqueue(context, userId) }
-        )
-
-        if (!victory) {
-            return MissionCompletionSummary(
-                mission = mission,
-                victory = false,
-                calmedSpirit = false,
-                expGained = 0,
-                leveledUpTo = null,
-                magicGained = 0,
-                manaGained = 0,
-                nectarGained = 0,
-                moonstonesGained = 0,
-                prosperityGained = 0,
-                lootEarned = emptyList(),
-                gameBeatenJustNow = false
-            )
-        }
-
-        val firstClear = mission.id !in profile.completedMissionIds
-        val opponent = mission.opponent
-        val prosperityGained = when {
-            mission.isWildPatrol ->
-                if (profile.communityProsperity < 100) mission.prosperityReward else 0
-            firstClear -> mission.prosperityReward
-            else -> 0
-        }
-        val expGained = opponent.rewardExp +
-                if (firstClear && !mission.isWildPatrol) 25 else 0
-        val earnedLoot = mutableListOf(opponent.guaranteedLoot)
-        if (calmedSpirit && opponent.guaranteedLoot != LootItemType.MANA_VIAL) {
-            earnedLoot += LootItemType.MANA_VIAL
-        }
-        val (newLevel, _) = applyHeroExp(profile.heroLevel, profile.heroExp, expGained)
-
-        return MissionCompletionSummary(
-            mission = mission,
-            victory = true,
-            calmedSpirit = calmedSpirit,
-            expGained = expGained,
-            leveledUpTo = newLevel.takeIf { it > profile.heroLevel },
-            magicGained = opponent.rewardMagic + if (calmedSpirit) 8 else 0,
-            manaGained = opponent.rewardMana + if (calmedSpirit) 10 else 0,
-            nectarGained = opponent.rewardNectar,
-            moonstonesGained = opponent.rewardMoonstones,
-            prosperityGained = prosperityGained,
-            lootEarned = earnedLoot,
-            gameBeatenJustNow = mission.isFinalExpedition && !profile.canopyRestored
-        )
-    }
-
-    suspend fun syncPendingMissionOutcomes(userId: String) {
-        ensureSeeded(userId)
-
-        val dao = localDatabase.gameDao()
-        syncRoomEventsAndRemove(
-            events = dao.getPendingMissionOutcomes(userId),
-            saveToCloud = { event -> saveMissionOutcomeToCloud(event) },
-            removeFromRoom = { event ->
-                dao.deletePendingMissionOutcome(event.eventId)
-            }
-        )
-    }
-
-    private suspend fun saveMissionOutcomeToCloud(event: PendingMissionOutcomeEntity) {
-        val mission = RpgMissionCatalog.missionById(event.missionId)
-            ?: throw IllegalStateException("Unknown mission: ${event.missionId}")
-        val profileRef = userDocRef(event.userId)
-        val receiptRef = profileRef
-            .collection("mission_outcomes")
-            .document(event.eventId)
-
-        db.runTransaction { transaction ->
-            if (transaction.get(receiptRef).exists()) {
-                return@runTransaction false
-            }
-
-            val profile = transaction.get(profileRef)
-                .toObject(FirestoreUserProfile::class.java)
-                ?.toEntity()
-                ?: throw IllegalStateException("Missing profile for mission outcome")
-
-            var lootCsv = profile.lootBagCsv
-            RpgMissionCatalog.parseLootBag(event.usedLootCsv).forEach { (item, count) ->
-                lootCsv = RpgMissionCatalog.consumeLoot(lootCsv, item, count) ?: lootCsv
-            }
-
-            val updates = mutableMapOf<String, Any>(
-                "mana" to event.remainingMana.coerceIn(4, profile.maxMana),
-                "lootBagCsv" to lootCsv,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-
-            if (event.victory) {
-                val firstClear = mission.id !in profile.completedMissionIds
-                val opponent = mission.opponent
-                val expGained = opponent.rewardExp +
-                        if (firstClear && !mission.isWildPatrol) 25 else 0
-                val magicGained = opponent.rewardMagic + if (event.calmedSpirit) 8 else 0
-                val manaGained = opponent.rewardMana + if (event.calmedSpirit) 10 else 0
-                val prosperityGained = when {
-                    mission.isWildPatrol ->
-                        if (profile.communityProsperity < 100) mission.prosperityReward else 0
-                    firstClear -> mission.prosperityReward
-                    else -> 0
-                }
-                val earnedLoot = mutableListOf(opponent.guaranteedLoot)
-                if (event.calmedSpirit &&
-                    opponent.guaranteedLoot != LootItemType.MANA_VIAL
-                ) {
-                    earnedLoot += LootItemType.MANA_VIAL
-                }
-                lootCsv = RpgMissionCatalog.addLoot(lootCsv, earnedLoot)
-
-                val (newLevel, newExp) = applyHeroExp(
-                    profile.heroLevel,
-                    profile.heroExp,
-                    expGained
-                )
-                val newProsperity =
-                    (profile.communityProsperity + prosperityGained).coerceAtMost(100)
-                val newNectar = profile.nectar + opponent.rewardNectar
-                val updatedProfile = profile.copy(
-                    heroLevel = newLevel,
-                    communityProsperity = newProsperity,
-                    magicEssence = profile.magicEssence + magicGained
-                )
-                val newMana = (event.remainingMana + manaGained)
-                    .coerceIn(0, updatedProfile.maxMana)
-
-                updates["heroLevel"] = newLevel
-                updates["heroExp"] = newExp
-                updates["mana"] = newMana
-                updates["magicEssence"] = profile.magicEssence + magicGained
-                updates["communityProsperity"] = newProsperity
-                updates["completedMissionsCsv"] =
-                    (profile.completedMissionIds + mission.id).joinToString(",")
-                updates["lootBagCsv"] = lootCsv
-                updates["nectar"] = newNectar
-                updates["moonstones"] = profile.moonstones + opponent.rewardMoonstones
-                updates["canopyRestored"] = profile.canopyRestored || mission.isFinalExpedition
-            }
-
-            transaction.update(profileRef, updates)
-            transaction.set(
-                receiptRef,
-                mapOf(
-                    "eventId" to event.eventId,
-                    "userId" to event.userId,
-                    "missionId" to event.missionId,
-                    "victory" to event.victory,
-                    "completedAtMillis" to event.completedAtMillis,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-            )
-            true
-        }.await()
-
-        val updatedProfile = getProfileOnce(event.userId) ?: return
-        if (event.victory) {
-            unlockBiomesForNectar(event.userId, updatedProfile.nectar)
-            syncDiscoveredLore(event.userId)
-        }
-        if (updatedProfile.lastActivityEpochDay != DailyStreakTracker.localEpochDay()) {
-            recordDailyActivity(event.userId)
-        }
-    }
-
     suspend fun syncPendingPuzzleCompletions(userId: String) {
         ensureSeeded(userId)
 
         val dao = localDatabase.gameDao()
         val pending = dao.getPendingCompletions(userId)
 
-        for (event in pending) {
-            val puzzleType = PuzzleType.fromId(event.puzzleType)
+        for ((eventId, _, puzzleType1, difficulty1, levelPlayed, starsEarned, rawScore, completedAtMillis) in pending) {
+            val puzzleType = PuzzleType.fromId(puzzleType1)
             val difficulty = DifficultyTier.entries.firstOrNull {
-                it.name == event.difficulty
-            } ?: throw IllegalStateException(
-                "Unknown puzzle difficulty: ${event.difficulty}"
-            )
+                it.name == difficulty1
+            } ?: throw IllegalStateException("Unknown puzzle difficulty: $difficulty1")
 
             val profileRef = userDocRef(userId)
-            val statsRef = puzzleStatsCollection(userId).document(event.puzzleType)
+            val statsRef = puzzleStatsCollection(userId).document(puzzleType1)
             val receiptRef = profileRef
                 .collection("puzzle_completions")
-                .document(event.eventId)
+                .document(eventId)
 
-            syncRoomEventsAndRemove(
-                events = listOf(event),
-                saveToCloud = {
-                    db.runTransaction { transaction ->
-                        if (transaction.get(receiptRef).exists()) {
-                            return@runTransaction false
-                        }
-
-                        val profile = transaction.get(profileRef)
-                            .toObject(FirestoreUserProfile::class.java)
-                            ?.toEntity()
-                            ?: PlayerProfileEntity()
-
-                        val stats = transaction.get(statsRef)
-                            .toObject(FirestorePuzzleStats::class.java)
-                            ?.toEntity()
-                            ?: PuzzleStatsEntity(puzzleType = event.puzzleType)
-
-                        val hero = JungleLoreCatalog.heroById(profile.selectedHeroId)
-                        val relic = JungleLoreCatalog.relicById(profile.equippedRelicId)
-                        val nectar = (
-                                (puzzleType.baseNectarReward + event.levelPlayed * 2) *
-                                        difficulty.rewardMultiplier
-                                ).roundToInt() + hero.bonusNectarPerPuzzle + relic.bonusNectar
-                        val moonstones =
-                            if (event.starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
-                        val skillXp = difficulty.xpBonus +
-                                event.starsEarned * 5 +
-                                (event.rawScore / 25).coerceAtMost(20) +
-                                hero.bonusSkillXp
-                        val (heroLevel, heroExp) = applyHeroExp(
-                            profile.heroLevel,
-                            profile.heroExp,
-                            35 + event.starsEarned * 10
-                        )
-                        val streak = profile.currentStreak + 1
-                        val nextLevel = maxOf(stats.currentLevel, event.levelPlayed + 1)
-
-                        val profileUpdates = mutableMapOf<String, Any>(
-                            "heroLevel" to heroLevel,
-                            "heroExp" to heroExp,
-                            "nectar" to profile.nectar + nectar,
-                            "moonstones" to profile.moonstones + moonstones,
-                            "currentStreak" to streak,
-                            "bestStreak" to maxOf(profile.bestStreak, streak),
-                            "totalPuzzlesSolved" to profile.totalPuzzlesSolved + 1,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-
-                        when (puzzleType.skill) {
-                            BrainSkill.MEMORY ->
-                                profileUpdates["memoryXp"] = profile.memoryXp + skillXp
-                            BrainSkill.LOGIC ->
-                                profileUpdates["logicXp"] = profile.logicXp + skillXp
-                            BrainSkill.SPATIAL ->
-                                profileUpdates["spatialXp"] = profile.spatialXp + skillXp
-                            BrainSkill.DEDUCTION ->
-                                profileUpdates["deductionXp"] = profile.deductionXp + skillXp
-                            BrainSkill.OBSERVATION ->
-                                profileUpdates["observationXp"] = profile.observationXp + skillXp
-                        }
-
-                        transaction.update(profileRef, profileUpdates)
-                        transaction.update(
-                            statsRef,
-                            mapOf(
-                                "accessed" to true,
-                                "currentLevel" to nextLevel,
-                                "totalStars" to stats.totalStars + event.starsEarned,
-                                "playedCount" to stats.playedCount + 1,
-                                "solvedCount" to stats.solvedCount + 1,
-                                "bestScore" to maxOf(stats.bestScore, event.rawScore),
-                                "bestStreak" to maxOf(stats.bestStreak, streak),
-                                "lastSolvedMillis" to event.completedAtMillis,
-                                "updatedAt" to FieldValue.serverTimestamp()
-                            )
-                        )
-                        transaction.set(
-                            receiptRef,
-                            mapOf(
-                                "userId" to userId,
-                                "eventId" to event.eventId,
-                                "puzzleType" to event.puzzleType,
-                                "levelPlayed" to event.levelPlayed,
-                                "starsEarned" to event.starsEarned,
-                                "rawScore" to event.rawScore,
-                                "completedAtMillis" to event.completedAtMillis,
-                                "createdAt" to FieldValue.serverTimestamp()
-                            )
-                        )
-                        true
-                    }.await()
-                },
-                removeFromRoom = {
-                    dao.deletePendingCompletion(event.eventId)
+            db.runTransaction { transaction ->
+                if (transaction.get(receiptRef).exists()) {
+                    return@runTransaction false
                 }
-            )
+
+                val profile = transaction.get(profileRef)
+                    .toObject(FirestoreUserProfile::class.java)
+                    ?.toEntity()
+                    ?: PlayerProfileEntity()
+
+                val stats = transaction.get(statsRef)
+                    .toObject(FirestorePuzzleStats::class.java)
+                    ?.toEntity()
+                    ?: PuzzleStatsEntity(puzzleType = puzzleType1)
+
+                val hero = JungleLoreCatalog.heroById(profile.selectedHeroId)
+                val relic = JungleLoreCatalog.relicById(profile.equippedRelicId)
+                val nectar = (
+                        (puzzleType.baseNectarReward + levelPlayed * 2) *
+                                difficulty.rewardMultiplier
+                        ).roundToInt() + hero.bonusNectarPerPuzzle + relic.bonusNectar
+                val moonstones =
+                    if (starsEarned == 3 || difficulty == DifficultyTier.ELDER) 2 else 1
+                val skillXp = difficulty.xpBonus +
+                        starsEarned * 5 +
+                        (rawScore / 25).coerceAtMost(20) +
+                        hero.bonusSkillXp
+                val (heroLevel, heroExp) = applyHeroExp(
+                    profile.heroLevel,
+                    profile.heroExp,
+                    35 + starsEarned * 10
+                )
+                val streak = profile.currentStreak + 1
+                val nextLevel = maxOf(stats.currentLevel, levelPlayed + 1)
+
+                val profileUpdates = mutableMapOf<String, Any>(
+                    "heroLevel" to heroLevel,
+                    "heroExp" to heroExp,
+                    "nectar" to profile.nectar + nectar,
+                    "moonstones" to profile.moonstones + moonstones,
+                    "currentStreak" to streak,
+                    "bestStreak" to maxOf(profile.bestStreak, streak),
+                    "totalPuzzlesSolved" to profile.totalPuzzlesSolved + 1,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                when (puzzleType.skill) {
+                    BrainSkill.MEMORY ->
+                        profileUpdates["memoryXp"] = profile.memoryXp + skillXp
+                    BrainSkill.LOGIC ->
+                        profileUpdates["logicXp"] = profile.logicXp + skillXp
+                    BrainSkill.SPATIAL ->
+                        profileUpdates["spatialXp"] = profile.spatialXp + skillXp
+                    BrainSkill.DEDUCTION ->
+                        profileUpdates["deductionXp"] = profile.deductionXp + skillXp
+                    BrainSkill.OBSERVATION ->
+                        profileUpdates["observationXp"] = profile.observationXp + skillXp
+                }
+
+                transaction.update(profileRef, profileUpdates)
+                transaction.update(
+                    statsRef,
+                    mapOf(
+                        "accessed" to true,
+                        "currentLevel" to nextLevel,
+                        "totalStars" to stats.totalStars + starsEarned,
+                        "playedCount" to stats.playedCount + 1,
+                        "solvedCount" to stats.solvedCount + 1,
+                        "bestScore" to maxOf(stats.bestScore, rawScore),
+                        "bestStreak" to maxOf(stats.bestStreak, streak),
+                        "lastSolvedMillis" to completedAtMillis,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                transaction.set(
+                    receiptRef,
+                    mapOf(
+                        "userId" to userId,
+                        "eventId" to eventId,
+                        "puzzleType" to puzzleType1,
+                        "levelPlayed" to levelPlayed,
+                        "starsEarned" to starsEarned,
+                        "rawScore" to rawScore,
+                        "completedAtMillis" to completedAtMillis,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                true
+            }.await()
+
+            // Delete only after the transaction succeeds. The receipt makes retries idempotent.
+            dao.deletePendingCompletion(eventId)
         }
     }
 
@@ -470,7 +271,7 @@ class GameRepository(
                 ).map { it.toEntity() }
             }
 
-    suspend fun getProfileOnce(userId: String): PlayerProfileEntity? {
+    suspend fun getProfile(userId: String): PlayerProfileEntity? {
         val ref = userDocRef(userId)
         return try {
             val snapshot = ref.get().await()
@@ -632,7 +433,7 @@ class GameRepository(
 
     suspend fun selectHero(userId: String, heroId: String) {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
         val hero = JungleLoreCatalog.heroById(heroId)
         if (currentProfile.nectar >= hero.unlockNectar) {
             updateProfileFields(
@@ -647,7 +448,7 @@ class GameRepository(
 
     suspend fun craftOrEquipRelic(userId: String, relicId: String): String {
         ensureSeeded(userId)
-        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val current = getProfile(userId) ?: PlayerProfileEntity()
         val relic = JungleLoreCatalog.relicById(relicId)
         val unlocked = current.unlockedRelicIds
         return if (relic.id in unlocked) {
@@ -669,24 +470,83 @@ class GameRepository(
         }
     }
 
-    suspend fun markIntroCompleted(userId: String, bonusNectar: Int = 0) {
-        ensureSeeded(userId)
-        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
-        val fields = mutableMapOf<String, Any>("introCompleted" to true)
+    suspend fun markIntroCompleted(
+        userId: String,
+        bonusNectar: Int = 0,
+    ) {
+        val dao = localDatabase.gameDao()
+        val current = dao.getProfileOnce() ?: PlayerProfileEntity()
         val extra = bonusNectar.coerceAtLeast(0)
-        if (!current.introCompleted && extra > 0) {
-            fields["nectar"] = current.nectar + extra
+
+        val fields = mutableMapOf<String, Any>(
+            "introCompleted" to true
+        )
+
+        val nectarAfterReward =
+            if (!current.introCompleted) {
+                current.nectar + extra
+            } else {
+                current.nectar
+            }
+
+        if (extra > 0) {
+            fields["nectar"] = nectarAfterReward
         }
-        updateProfileFields(userId = userId, fields = fields)
-        if (!current.introCompleted && extra > 0) {
-            unlockBiomesForNectar(userId, current.nectar + extra)
-            syncDiscoveredLore(userId)
+
+        dao.upsertProfile(
+            current.copy(
+                introCompleted = true,
+                nectar = nectarAfterReward
+            )
+        )
+
+        val ref = userDocRef(userId)
+
+        try {
+            ref.set(
+                fields + ("updatedAt" to FieldValue.serverTimestamp()),
+                SetOptions.merge()
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: FirebaseFirestoreException) {
+            if (e.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+                e.code == FirebaseFirestoreException.Code.UNAUTHENTICATED
+            ) {
+                return
+            }
+            throw e
         }
     }
 
     suspend fun resetIntroTutorial(userId: String) {
-        ensureSeeded(userId)
-        updateProfileFields(userId = userId, fields = mapOf("introCompleted" to false))
+        val dao = localDatabase.gameDao()
+        val current = dao.getProfileOnce() ?: PlayerProfileEntity()
+
+        dao.upsertProfile(
+            current.copy(introCompleted = false)
+        )
+
+        val ref = userDocRef(userId)
+
+        try {
+            ref.set(
+                mapOf(
+                    "introCompleted" to false,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: FirebaseFirestoreException) {
+            if (e.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+                e.code == FirebaseFirestoreException.Code.UNAUTHENTICATED
+            ) {
+                return
+            }
+            throw e
+        }
     }
 
     suspend fun markPuzzleAccessed(userId: String, puzzleType: PuzzleType) {
@@ -713,7 +573,7 @@ class GameRepository(
         todayEpochDay: Long = DailyStreakTracker.localEpochDay()
     ): DailyStreakEvaluation {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
         val evaluation = DailyStreakTracker.evaluate(
             currentStreak = currentProfile.dailyStreak,
             longestStreak = currentProfile.longestDailyStreak,
@@ -755,7 +615,7 @@ class GameRepository(
         rawScore: Int
     ): PuzzleCompletionResult {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
         val hero = JungleLoreCatalog.heroById(currentProfile.selectedHeroId)
         val relic = JungleLoreCatalog.relicById(currentProfile.equippedRelicId)
         val existingStats = getPuzzleStatsOnce(userId, puzzleType.id)
@@ -847,7 +707,7 @@ class GameRepository(
         rewardExp: Int
     ) {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
         val hero = JungleLoreCatalog.heroById(currentProfile.selectedHeroId)
         val newNectar = currentProfile.nectar + rewardNectar
         val (newLevel, newExp) = applyHeroExp(
@@ -881,7 +741,7 @@ class GameRepository(
         nectarCost: Int = 10
     ): Boolean {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
         if (currentProfile.nectar < nectarCost) return false
         val (newLevel, newExp) = applyHeroExp(currentProfile.heroLevel, currentProfile.heroExp, 15)
         updateProfileFields(
@@ -910,7 +770,7 @@ class GameRepository(
         usedLootInBattle: Map<LootItemType, Int>
     ): MissionCompletionSummary {
         ensureSeeded(userId)
-        val currentProfile = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val currentProfile = getProfile(userId) ?: PlayerProfileEntity()
 
         var updatedLootCsv = currentProfile.lootBagCsv
         usedLootInBattle.forEach { (item, qty) ->
@@ -1025,7 +885,7 @@ class GameRepository(
 
     suspend fun restAtSanctuary(userId: String): Int {
         ensureSeeded(userId)
-        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val current = getProfile(userId) ?: PlayerProfileEntity()
         val maxMana = current.maxMana
         updateProfileFields(userId, mapOf("mana" to maxMana))
         return maxMana
@@ -1033,7 +893,7 @@ class GameRepository(
 
     suspend fun brewBattleLoot(userId: String, item: LootItemType, nectarCost: Int = 12): Boolean {
         ensureSeeded(userId)
-        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val current = getProfile(userId) ?: PlayerProfileEntity()
         if (current.nectar < nectarCost) return false
         val updatedLoot = RpgMissionCatalog.addLoot(current.lootBagCsv, listOf(item))
         updateProfileFields(
@@ -1052,7 +912,7 @@ class GameRepository(
         lootItem: LootItemType? = null
     ) {
         ensureSeeded(userId)
-        val current = getProfileOnce(userId) ?: PlayerProfileEntity()
+        val current = getProfile(userId) ?: PlayerProfileEntity()
         val newNectar = current.nectar + nectarGain.coerceAtLeast(0)
         val fields = mutableMapOf<String, Any>("nectar" to newNectar)
         if (lootItem != null) {
@@ -1234,7 +1094,7 @@ class GameRepository(
     }
 
     private suspend fun syncDiscoveredLore(userId: String) {
-        val current = getProfileOnce(userId) ?: return
+        val current = getProfile(userId) ?: return
         val creaturesSnap = try {
             creaturesCollection(userId).get().await()
         } catch (e: CancellationException) {

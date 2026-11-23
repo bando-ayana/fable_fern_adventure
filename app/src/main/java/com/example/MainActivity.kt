@@ -12,7 +12,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -20,10 +19,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.GameRepository
 import com.example.data.local.FernfableDatabase
 import com.example.ui.FernfableApp
-import com.example.ui.FernfableViewModel
 import com.example.ui.components.ProvideFernfableAccessibility
 import com.example.ui.screens.AuthScreen
 import com.example.ui.theme.FernfableTheme
+import com.example.viewmodel.FernfableViewModel
+import com.example.viewmodel.IntroViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -61,7 +61,8 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 
 @Composable
 fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    val currentUser by auth.authStateFlow()
+        .collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val user = currentUser
 
     if (user == null) {
@@ -72,17 +73,23 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
         val credentialManager = remember(context) { CredentialManager.create(context) }
 
         key(user.uid) {
-            val viewModel: FernfableViewModel = viewModel(
-                key = user.uid,
+            val appContext = context.applicationContext
+
+            val repository = remember(user.uid, appContext) {
+                val databaseId = appContext.getString(R.string.firestore_database_id)
+                GameRepository(
+                    FirebaseFirestore.getInstance(databaseId),
+                    FernfableDatabase.getInstance(appContext),
+                    appContext
+                )
+            }
+
+            val introViewModel: IntroViewModel = viewModel(
+                key = "intro-${user.uid}",
                 factory = viewModelFactory {
                     initializer {
-                        val app = checkNotNull(this[APPLICATION_KEY]) {
-                            "APPLICATION_KEY missing from CreationExtras"
-                        }
-                        val databaseId = app.getString(R.string.firestore_database_id)
-                        val db = FirebaseFirestore.getInstance(databaseId)
-                        FernfableViewModel(
-                            repository = GameRepository(db, FernfableDatabase.getInstance(app), app),
+                        IntroViewModel(
+                            repository = repository,
                             currentUserId = user.uid,
                             userDisplayName = user.displayName,
                             userEmail = user.email
@@ -90,14 +97,32 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                     }
                 }
             )
+
+            val fernfableViewModel: FernfableViewModel = viewModel(
+                key = "fernfable-${user.uid}",
+                factory = viewModelFactory {
+                    initializer {
+                        FernfableViewModel(
+                            repository = repository,
+                            currentUserId = user.uid,
+                            userDisplayName = user.displayName,
+                            userEmail = user.email
+                        )
+                    }
+                }
+            )
+
             FernfableApp(
-                viewModel = viewModel,
-                userEmail = user.email ?: if (BuildConfig.DEBUG && user.isAnonymous) "tester@example.com" else null,
+                viewModel = introViewModel,
+                fernfableViewModel = fernfableViewModel,
+                userEmail = user.email,
                 onSignOut = {
                     scope.launch {
                         withContext(NonCancellable) {
                             runCatching {
-                                credentialManager.clearCredentialState(ClearCredentialStateRequest())
+                                credentialManager.clearCredentialState(
+                                    ClearCredentialStateRequest()
+                                )
                             }
                             auth.signOut()
                         }
@@ -107,3 +132,5 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
         }
     }
 }
+
+

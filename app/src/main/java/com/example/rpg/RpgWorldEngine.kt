@@ -2,10 +2,7 @@ package com.example.rpg
 
 import com.example.data.JungleLoreCatalog
 import com.example.data.RpgMissionCatalog
-import com.example.model.LootItemType
 import com.example.model.PuzzleType
-import com.example.model.WildCreatureTemperament
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -941,7 +938,7 @@ object RpgWorldEngine {
             val unlocked = mission == null || mission.isWildPatrol || communityProsperity >= mission.requiredProsperity
             val cleared = bestEnemy.missionId != null && bestEnemy.missionId in completedMissions
             val verb = when {
-                !unlocked -> "Inspect (${mission?.requiredProsperity}% Town)"
+                !unlocked -> "Inspect (${mission.requiredProsperity}% Town)"
                 cleared -> "Rematch ${bestEnemy.name}"
                 else -> "Battle ${bestEnemy.name}"
             }

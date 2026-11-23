@@ -70,8 +70,8 @@ import com.example.model.PuzzleType
 import com.example.rpg.InteractableKind
 import com.example.rpg.IntroStage
 import com.example.rpg.IntroTutorialEngine
-import com.example.rpg.IntroTutorialState
 import com.example.rpg.WorldActionType
+import com.example.stateHolder.IntroTutorialState
 import com.example.ui.components.LocalAccessibilityUi
 import com.example.ui.components.VirtualAnalogStick
 import com.example.ui.components.drawInteractableObject

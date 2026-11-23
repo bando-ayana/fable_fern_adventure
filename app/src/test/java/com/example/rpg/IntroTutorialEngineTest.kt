@@ -2,6 +2,7 @@ package com.example.rpg
 
 import com.example.data.RpgMissionCatalog
 import com.example.model.PuzzleType
+import com.example.stateHolder.IntroTutorialState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull

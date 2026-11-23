@@ -60,6 +60,8 @@ import androidx.navigation.compose.rememberNavController
 import com.example.R
 import com.example.audio.AudioScene
 import com.example.audio.FernfableAudioManager
+import com.example.data.RpgMissionCatalog
+import com.example.model.MissionCompletionSummary
 import com.example.model.PuzzleCompletionResult
 import com.example.model.PuzzleType
 import com.example.navigation.FernfableRoutes
@@ -79,6 +81,8 @@ import com.example.ui.screens.MissionsScreen
 import com.example.ui.screens.OpeningCutsceneScreen
 import com.example.ui.screens.PuzzleHubScreen
 import com.example.ui.screens.PuzzlePlayScreen
+import com.example.viewmodel.FernfableViewModel
+import com.example.viewmodel.IntroViewModel
 
 private val topDestinations = listOf(
     TopDestination(
@@ -125,12 +129,14 @@ private val topDestinations = listOf(
 
 @Composable
 fun FernfableApp(
-    viewModel: FernfableViewModel,
+    viewModel: IntroViewModel,
     userEmail: String? = null,
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    fernfableViewModel: FernfableViewModel
 ) {
     ProvideFernfableAccessibility {
         FernfableAppShell(
+            fernfableViewModel = fernfableViewModel,
             viewModel = viewModel,
             userEmail = userEmail,
             onSignOut = onSignOut
@@ -140,12 +146,14 @@ fun FernfableApp(
 
 @Composable
 private fun FernfableAppShell(
-    viewModel: FernfableViewModel,
+    viewModel: IntroViewModel,
     userEmail: String?,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    fernfableViewModel: FernfableViewModel
 ) {
     val navController = rememberNavController()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val introUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by fernfableViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -155,9 +163,10 @@ private fun FernfableAppShell(
     val audioManager = remember(context.applicationContext) {
         FernfableAudioManager(context.applicationContext)
     }
-    val completionResult by viewModel.completionResult.collectAsStateWithLifecycle()
+    val missionSummary by fernfableViewModel.missionSummary.collectAsStateWithLifecycle()
+    val completionResult by fernfableViewModel.completionResult.collectAsStateWithLifecycle()
     val isIntroShrinePuzzle by
-    viewModel.isIntroShrinePuzzle.collectAsStateWithLifecycle()
+    fernfableViewModel.isIntroShrinePuzzle.collectAsStateWithLifecycle()
 
     DisposableEffect(lifecycleOwner, audioManager) {
         val observer = LifecycleEventObserver { _, event ->
@@ -180,8 +189,20 @@ private fun FernfableAppShell(
             isIntroShrinePuzzle &&
             currentRoute == FernfableRoutes.PLAY_PUZZLE
         ) {
-            viewModel.dismissCompletion()
+            viewModel.completeIntroShrinePuzzle()
+            fernfableViewModel.dismissCompletion()
             navController.popBackStack()
+        }
+    }
+
+    LaunchedEffect(missionSummary) {
+        val summary = missionSummary ?: return@LaunchedEffect
+
+        if (
+            summary.victory &&
+            summary.mission.id == RpgMissionCatalog.introMission.id
+        ) {
+            viewModel.completeIntroBattle()
         }
     }
 
@@ -191,11 +212,19 @@ private fun FernfableAppShell(
         )
     }
 
-    LaunchedEffect(uiState.snackbarMessage) {
-        val msg = uiState.snackbarMessage
+    LaunchedEffect(introUiState.snackbarMessage) {
+        val msg = introUiState.snackbarMessage
         if (msg != null) {
             snackbarHostState.showSnackbar(msg)
             viewModel.clearSnackbar()
+        }
+    }
+
+    LaunchedEffect(introUiState.snackbarMessage) {
+        val msg = introUiState.snackbarMessage
+        if (msg != null) {
+            snackbarHostState.showSnackbar(msg)
+            fernfableViewModel.clearSnackbar()
         }
     }
 
@@ -214,13 +243,14 @@ private fun FernfableAppShell(
         levelOverride: Int? = null,
         accessedFromRpg: Boolean = true
     ) {
-        viewModel.startPuzzle(type, levelOverride, accessedFromRpg = accessedFromRpg)
+        fernfableViewModel.startPuzzle(type, levelOverride, accessedFromRpg = accessedFromRpg)
         navController.navigate(FernfableRoutes.PLAY_PUZZLE) {
             launchSingleTop = true
         }
     }
 
     JungleAtmosphereBackground(
+        fernfableViewModel,
         viewModel,
         isPlayingPuzzle,
         snackbarHostState,
@@ -232,13 +262,15 @@ private fun FernfableAppShell(
         navController,
         uiState,
         audioManager,
-        completionResult
+        completionResult,
+        missionSummary
     )
 }
 
 @Composable
 fun JungleAtmosphereBackground(
-    viewModel: FernfableViewModel = viewModel(),
+    fernfableViewModel: FernfableViewModel = viewModel(),
+    introViewModel: IntroViewModel,
     isPlayingPuzzle: Boolean,
     snackbarHostState: SnackbarHostState,
     navigateTop: (String) -> Unit,
@@ -249,38 +281,38 @@ fun JungleAtmosphereBackground(
     navController: NavHostController,
     uiState: FernfableUiState,
     audioManager: FernfableAudioManager,
-    completionResult: PuzzleCompletionResult?
+    completionResult: PuzzleCompletionResult?,
+    missionSummary: MissionCompletionSummary?
 ) {
-    val activeEncounter by viewModel.activeEncounter.collectAsStateWithLifecycle()
-    val encounterFeedback by viewModel.encounterFeedback.collectAsStateWithLifecycle()
-    val activePuzzleType by viewModel.activePuzzleType.collectAsStateWithLifecycle()
-    val activePuzzleLevel by viewModel.activePuzzleLevel.collectAsStateWithLifecycle()
-    val fireflyState by viewModel.fireflyState.collectAsStateWithLifecycle()
-    val mushroomState by viewModel.mushroomState.collectAsStateWithLifecycle()
-    val mushroomSelectedSlot by viewModel.mushroomSelectedSlot.collectAsStateWithLifecycle()
-    val fernMosaicState by viewModel.fernMosaicState.collectAsStateWithLifecycle()
-    val mosaicStatus by viewModel.mosaicStatus.collectAsStateWithLifecycle()
-    val canopySpotterState by viewModel.canopySpotterState.collectAsStateWithLifecycle()
-    val spotterStatus by viewModel.spotterStatus.collectAsStateWithLifecycle()
-    val groveGridState by viewModel.groveGridState.collectAsStateWithLifecycle()
-    val selectedGridCell by viewModel.selectedGridCell.collectAsStateWithLifecycle()
-    val vineWeaverState by viewModel.vineWeaverState.collectAsStateWithLifecycle()
-    val spiritLockState by viewModel.spiritLockState.collectAsStateWithLifecycle()
-    val activeBattle by viewModel.activeBattle.collectAsStateWithLifecycle()
-    val missionSummary by viewModel.missionSummary.collectAsStateWithLifecycle()
-    val worldState by viewModel.worldState.collectAsStateWithLifecycle()
+    val activeEncounter by fernfableViewModel.activeEncounter.collectAsStateWithLifecycle()
+    val encounterFeedback by fernfableViewModel.encounterFeedback.collectAsStateWithLifecycle()
+    val activePuzzleType by fernfableViewModel.activePuzzleType.collectAsStateWithLifecycle()
+    val activePuzzleLevel by fernfableViewModel.activePuzzleLevel.collectAsStateWithLifecycle()
+    val fireflyState by fernfableViewModel.fireflyState.collectAsStateWithLifecycle()
+    val mushroomState by fernfableViewModel.mushroomState.collectAsStateWithLifecycle()
+    val mushroomSelectedSlot by fernfableViewModel.mushroomSelectedSlot.collectAsStateWithLifecycle()
+    val fernMosaicState by fernfableViewModel.fernMosaicState.collectAsStateWithLifecycle()
+    val mosaicStatus by fernfableViewModel.mosaicStatus.collectAsStateWithLifecycle()
+    val canopySpotterState by fernfableViewModel.canopySpotterState.collectAsStateWithLifecycle()
+    val spotterStatus by fernfableViewModel.spotterStatus.collectAsStateWithLifecycle()
+    val groveGridState by fernfableViewModel.groveGridState.collectAsStateWithLifecycle()
+    val selectedGridCell by fernfableViewModel.selectedGridCell.collectAsStateWithLifecycle()
+    val vineWeaverState by fernfableViewModel.vineWeaverState.collectAsStateWithLifecycle()
+    val spiritLockState by fernfableViewModel.spiritLockState.collectAsStateWithLifecycle()
+    val activeBattle by fernfableViewModel.activeBattle.collectAsStateWithLifecycle()
+    val worldState by fernfableViewModel.worldState.collectAsStateWithLifecycle()
     val calmMode = LocalAccessibilityUi.current.calmMode
-    val isProfileLoaded by viewModel.isProfileLoaded.collectAsStateWithLifecycle()
-    val isRecordingMissionReward by viewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
+    val isProfileLoaded by fernfableViewModel.isProfileLoaded.collectAsStateWithLifecycle()
+    val isRecordingMissionReward by fernfableViewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
     val introCompletedLocally by
-    viewModel.introCompletedLocally.collectAsStateWithLifecycle()
+    fernfableViewModel.introCompletedLocally.collectAsStateWithLifecycle()
     val isInOnboarding = !isProfileLoaded || (!uiState.profile.introCompleted && !introCompletedLocally)
-    val introState by viewModel.introState.collectAsStateWithLifecycle()
+    val introState by fernfableViewModel.introState.collectAsStateWithLifecycle()
     val screenWidthDp = LocalWindowInfo.current.containerSize.width
     val useRail = screenWidthDp >= 600
     val pendingDatabaseRetry by
-    viewModel.pendingDatabaseRetry.collectAsStateWithLifecycle()
+    fernfableViewModel.pendingDatabaseRetry.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -376,9 +408,9 @@ fun JungleAtmosphereBackground(
                                     heroId = uiState.profile.selectedHeroId,
                                     isAudioMuted = isAudioMuted,
                                     onToggleAudioMute = audioManager::toggleMute,
-                                    onPageChange = viewModel::setCutscenePage,
-                                    onBeginTraining = viewModel::beginIntroTrainingLevel,
-                                    onSkipIntro = viewModel::skipIntroTutorial
+                                    onPageChange = introViewModel::setCutscenePage,
+                                    onBeginTraining = introViewModel::beginIntroTrainingLevel,
+                                    onSkipIntro = introViewModel::skipIntroTutorial
                                 )
                             } else {
                                 IntroTutorialScreen(
@@ -391,16 +423,16 @@ fun JungleAtmosphereBackground(
                                     isAudioMuted = isAudioMuted,
                                     hasActiveBattle = activeBattle != null,
                                     onToggleAudioMute = audioManager::toggleMute,
-                                    onSkipIntro = viewModel::skipIntroTutorial,
-                                    onGraduateToWorld = viewModel::completeIntroGraduation,
-                                    onStepFrame = viewModel::stepIntroWorldFrame,
-                                    onSetTapTarget = viewModel::setIntroTapTarget,
-                                    onInteractLantern = viewModel::interactWithIntroLantern,
+                                    onSkipIntro = introViewModel::skipIntroTutorial,
+                                    onGraduateToWorld = introViewModel::completeIntroGraduation,
+                                    onStepFrame = introViewModel::stepIntroWorldFrame,
+                                    onSetTapTarget = introViewModel::setIntroTapTarget,
+                                    onInteractLantern = introViewModel::interactWithIntroLantern,
                                     onLaunchIntroPuzzle = { type -> launchPuzzle(type, 1, true) },
-                                    onStartIntroBattle = viewModel::startMission,
-                                    onRestMana = viewModel::restManaAtSanctuary,
-                                    onShowDialogue = viewModel::showIntroDialogue,
-                                    onDismissDialogue = viewModel::dismissIntroDialogue
+                                    onStartIntroBattle = introViewModel::startMission,
+                                    onRestMana = fernfableViewModel::restManaAtSanctuary,
+                                    onShowDialogue = introViewModel::showIntroDialogue,
+                                    onDismissDialogue = introViewModel::dismissIntroDialogue
                                 )
                             }
                         } else {
@@ -414,24 +446,24 @@ fun JungleAtmosphereBackground(
                                 isAudioMuted = isAudioMuted,
                                 onToggleAudioMute = audioManager::toggleMute,
                                 onSignOut = onSignOut,
-                                onOpenBiome = viewModel::openBiomeEncounter,
-                                onDismissEncounter = viewModel::dismissEncounter,
-                                onChooseStoryOption = viewModel::chooseStoryOption,
-                                onSelectHero = viewModel::selectHero,
-                                onCraftOrEquipRelic = viewModel::craftOrEquipRelic,
+                                onOpenBiome = fernfableViewModel::openBiomeEncounter,
+                                onDismissEncounter = fernfableViewModel::dismissEncounter,
+                                onChooseStoryOption = fernfableViewModel::chooseStoryOption,
+                                onSelectHero = fernfableViewModel::selectHero,
+                                onCraftOrEquipRelic = fernfableViewModel::craftOrEquipRelic,
                                 onLaunchPuzzle = { type -> launchPuzzle(type, null, true) },
                                 onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
                                 onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) },
-                                onStepWorldFrame = viewModel::stepWorldFrame,
-                                onSetWorldTapTarget = viewModel::setWorldTapTarget,
-                                onShowWorldDialogue = viewModel::showWorldDialogue,
-                                onDismissWorldDialogue = viewModel::dismissWorldDialogue,
-                                onPostWorldToast = viewModel::postWorldToast,
-                                onInteractLantern = viewModel::interactWithWorldLantern,
-                                onForageObject = viewModel::forageWorldObject,
-                                onRestMana = viewModel::restManaAtSanctuary,
-                                onStartWorldMission = viewModel::startMission,
-                                onReplayIntro = viewModel::replayIntroTutorial
+                                onStepWorldFrame = fernfableViewModel::stepWorldFrame,
+                                onSetWorldTapTarget = fernfableViewModel::setWorldTapTarget,
+                                onShowWorldDialogue = fernfableViewModel::showWorldDialogue,
+                                onDismissWorldDialogue = fernfableViewModel::dismissWorldDialogue,
+                                onPostWorldToast = fernfableViewModel::postWorldToast,
+                                onInteractLantern = fernfableViewModel::interactWithWorldLantern,
+                                onForageObject = fernfableViewModel::forageWorldObject,
+                                onRestMana = fernfableViewModel::restManaAtSanctuary,
+                                onStartWorldMission = fernfableViewModel::startMission,
+                                onReplayIntro = introViewModel::replayIntroTutorial
                             )
                         }
                     }
@@ -439,9 +471,9 @@ fun JungleAtmosphereBackground(
                     composable(FernfableRoutes.MISSIONS) {
                         MissionsScreen(
                             uiState = uiState,
-                            onStartMission = viewModel::startMission,
-                            onRestMana = viewModel::restManaAtSanctuary,
-                            onBrewLoot = viewModel::brewBattleLoot,
+                            onStartMission = fernfableViewModel::startMission,
+                            onRestMana = fernfableViewModel::restManaAtSanctuary,
+                            onBrewLoot = fernfableViewModel::brewBattleLoot,
                             onLaunchPuzzle = { type -> launchPuzzle(type, null, true) }
                         )
                     }
@@ -449,8 +481,8 @@ fun JungleAtmosphereBackground(
                     composable(FernfableRoutes.PUZZLES) {
                         PuzzleHubScreen(
                             uiState = uiState,
-                            onSelectDifficulty = viewModel::setDifficulty,
-                            onToggleGentleMode = viewModel::setGentleMode,
+                            onSelectDifficulty = fernfableViewModel::setDifficulty,
+                            onToggleGentleMode = fernfableViewModel::setGentleMode,
                             onStartPuzzle = { type, level -> launchPuzzle(type, level, false) },
                             onNavigateToGrove = { navigateTop(FernfableRoutes.GROVE) },
                             onNavigateToMissions = { navigateTop(FernfableRoutes.MISSIONS) }
@@ -460,7 +492,7 @@ fun JungleAtmosphereBackground(
                     composable(FernfableRoutes.BESTIARY) {
                         BestiaryScreen(
                             uiState = uiState,
-                            onFeedCreature = viewModel::feedCreature,
+                            onFeedCreature = fernfableViewModel::feedCreature,
                             onPlaySignaturePuzzle = { type -> launchPuzzle(type, null, true) }
                         )
                     }
@@ -494,34 +526,34 @@ fun JungleAtmosphereBackground(
                             spiritLockState = spiritLockState,
                             completionResult = completionResult,
                             onBack = {
-                                viewModel.dismissCompletion()
+                                fernfableViewModel.dismissCompletion()
                                 navController.popBackStack()
                             },
                             onRestartLevel = { level ->
-                                viewModel.startPuzzle(
+                                fernfableViewModel.startPuzzle(
                                     activePuzzleType,
                                     level
                                 )
                             },
-                            onTapBlossom = viewModel::tapFireflyBlossom,
-                            onReplayFireflyHint = viewModel::replayFireflyHint,
-                            onTapMushroomSlot = viewModel::tapMushroomSlot,
-                            onUseMushroomHint = viewModel::useMushroomHint,
-                            onSelectMosaicSlot = viewModel::selectMosaicSlot,
-                            onChooseMosaicTile = viewModel::chooseMosaicTile,
-                            onUseMosaicHint = viewModel::useMosaicHint,
-                            onTapSpotterCharm = viewModel::tapSpotterCharm,
-                            onUseSpotterHint = viewModel::useSpotterHint,
-                            onSelectGridCell = viewModel::selectGridCell,
-                            onPlaceGridRune = viewModel::placeGridRune,
-                            onUseGridHint = viewModel::useGridHint,
-                            onRotateVineTile = viewModel::rotateVineTile,
-                            onUseVineHint = viewModel::useVineHint,
-                            onAppendDraftRune = viewModel::appendDraftRune,
-                            onRemoveLastDraftRune = viewModel::removeLastDraftRune,
-                            onSubmitSpiritDraft = viewModel::submitSpiritDraft,
-                            onUseSpiritHint = viewModel::useSpiritHint,
-                            onDismissCompletion = viewModel::dismissCompletion
+                            onTapBlossom = fernfableViewModel::tapFireflyBlossom,
+                            onReplayFireflyHint = fernfableViewModel::replayFireflyHint,
+                            onTapMushroomSlot = fernfableViewModel::tapMushroomSlot,
+                            onUseMushroomHint = fernfableViewModel::useMushroomHint,
+                            onSelectMosaicSlot = fernfableViewModel::selectMosaicSlot,
+                            onChooseMosaicTile = fernfableViewModel::chooseMosaicTile,
+                            onUseMosaicHint = fernfableViewModel::useMosaicHint,
+                            onTapSpotterCharm = fernfableViewModel::tapSpotterCharm,
+                            onUseSpotterHint = fernfableViewModel::useSpotterHint,
+                            onSelectGridCell = fernfableViewModel::selectGridCell,
+                            onPlaceGridRune = fernfableViewModel::placeGridRune,
+                            onUseGridHint = fernfableViewModel::useGridHint,
+                            onRotateVineTile = fernfableViewModel::rotateVineTile,
+                            onUseVineHint = fernfableViewModel::useVineHint,
+                            onAppendDraftRune = fernfableViewModel::appendDraftRune,
+                            onRemoveLastDraftRune = fernfableViewModel::removeLastDraftRune,
+                            onSubmitSpiritDraft = fernfableViewModel::submitSpiritDraft,
+                            onUseSpiritHint = fernfableViewModel::useSpiritHint,
+                            onDismissCompletion = fernfableViewModel::dismissCompletion
                         )
                     }
                 }
@@ -531,7 +563,7 @@ fun JungleAtmosphereBackground(
 
     pendingDatabaseRetry?.let { prompt ->
         AlertDialog(
-            onDismissRequest = viewModel::cancelPendingDatabaseRetry,
+            onDismissRequest = fernfableViewModel::cancelPendingDatabaseRetry,
             title = {
                 Text("Couldn’t save to the cloud")
             },
@@ -543,12 +575,12 @@ fun JungleAtmosphereBackground(
                 )
             },
             confirmButton = {
-                TextButton(onClick = viewModel::retryPendingDatabaseOperation) {
+                TextButton(onClick = fernfableViewModel::retryPendingDatabaseOperation) {
                     Text("Retry")
                 }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::cancelPendingDatabaseRetry) {
+                TextButton(onClick = fernfableViewModel::cancelPendingDatabaseRetry) {
                     Text("Don’t save")
                 }
             }
@@ -561,11 +593,11 @@ fun JungleAtmosphereBackground(
             battleState = currentBattle,
             heroId = uiState.profile.selectedHeroId,
             missionSummary = missionSummary,
-            onAdvanceCommunityStep = viewModel::advanceMissionCommunityStep,
-            onPerformAction = viewModel::performBattleAction,
-            onUseLoot = viewModel::useBattleLoot,
-            onRetreat = viewModel::retreatFromBattle,
-            onDismiss = viewModel::dismissMissionSheet,
+            onAdvanceCommunityStep = fernfableViewModel::advanceMissionCommunityStep,
+            onPerformAction = fernfableViewModel::performBattleAction,
+            onUseLoot = fernfableViewModel::useBattleLoot,
+            onRetreat = fernfableViewModel::retreatFromBattle,
+            onDismiss = fernfableViewModel::dismissMissionSheet,
             isRecordingMissionReward = isRecordingMissionReward,
             onLaunchPuzzle = { type, _, _ -> launchPuzzle(type, null, true) }
         )

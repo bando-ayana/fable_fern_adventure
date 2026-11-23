@@ -2,6 +2,7 @@ package com.example.rpg
 
 import com.example.data.RpgMissionCatalog
 import com.example.model.PuzzleType
+import com.example.stateHolder.IntroTutorialState
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -49,15 +50,6 @@ enum class IntroStage(
         tip = "Claim +20 Starter Sunbeam Nectar as your Solari Vanguard graduation gift."
     )
 }
-
-data class IntroTutorialState(
-    val stage: IntroStage = IntroStage.CUTSCENE,
-    val cutscenePage: Int = 0,
-    val worldState: RpgWorldState = IntroTutorialEngine.initialWorldState(),
-    val lanternLit: Boolean = false,
-    val shrinePuzzleSolved: Boolean = false,
-    val sproutlingDefeated: Boolean = false
-)
 
 object IntroTutorialEngine {
     const val MAP_WIDTH = 12

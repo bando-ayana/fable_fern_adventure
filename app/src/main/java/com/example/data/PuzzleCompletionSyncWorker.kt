@@ -31,14 +31,12 @@ class PuzzleCompletionSyncWorker(
             val databaseId = applicationContext.getString(R.string.firestore_database_id)
             val firestore = FirebaseFirestore.getInstance(databaseId)
             val room = FernfableDatabase.getInstance(applicationContext)
-            val repository = GameRepository(
+
+            GameRepository(
                 db = firestore,
                 localDatabase = room,
                 context = applicationContext
-            )
-
-          repository.syncPendingPuzzleCompletions(userId)
-            repository.syncPendingMissionOutcomes(userId)
+            ).syncPendingPuzzleCompletions(userId)
 
             Result.success()
         } catch (e: CancellationException) {

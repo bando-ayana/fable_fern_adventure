@@ -393,8 +393,30 @@ fun AuthScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(54.dp)
+                                            .speakOnTouch("Anonymous Sign-In button. Sign in to start playing Fernfable.")
+                                            .testTag("anonymous_sign_in_button")
                                     ) {
-                                        Text("Continue anonymously (debug)")
+                                        if (isLoading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(22.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                strokeWidth = 2.5.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text("Connecting Sanctuary...")
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Rounded.AutoAwesome,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "Anonymous Sign-In (No Google Account)",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
