@@ -1,0 +1,79 @@
+{
+  "project_info": {
+    "project_number": "869226611953",
+    "project_id": "gen-lang-client-0725165327",
+    "storage_bucket": "gen-lang-client-0725165327.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:869226611953:android:f3270bd86c264b61f19550",
+        "android_client_info": {
+          "package_name": "com.aistudio.fernfable.kqzmxp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "869226611953-1e50h3g8c77fmk6ijgiogvvn67f6kt51.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "0c377d768729702885959f6ffb863f10b5f65a2d"
+          }
+        },
+        {
+          "client_id": "869226611953-7qtel0d48dr4tjoq2i92lj2a0t96sd1u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "55cd3318b10b2730328611e02067fd26120c8e5f"
+          }
+        },
+        {
+          "client_id": "869226611953-iqo4n20quqpimd1r2jgnessvpc7u130q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "8c73d1e4777ac4f27b643ff5497cc3ba5cd6c4c0"
+          }
+        },
+        {
+          "client_id": "869226611953-k7fpo7kk3dleh59ef4ut0ka20dj67914.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "3e97d61feb08caa72e7e26e314d8dc7f9b47ea2d"
+          }
+        },
+        {
+          "client_id": "869226611953-rugrlo7gt8nj0eu6vg67a3ph4fnbfcu5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.fernfable.kqzmxp",
+            "certificate_hash": "133fcf9ba5bffc4426b6ab0bc87f9415f1a21d54"
+          }
+        },
+        {
+          "client_id": "869226611953-upr319g98f0ep4q6eh06i9rgb3kihoup.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5FuJxGcDUfcu7tX1xIrhObErVklYv7Uo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "869226611953-upr319g98f0ep4q6eh06i9rgb3kihoup.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

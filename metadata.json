@@ -1,0 +1,6 @@
+{
+  "name": "Fernfable",
+  "description": "A whimsical fantasy game set in a mythical jungle with friendly creatures and anytime brain-teaser mini puzzles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

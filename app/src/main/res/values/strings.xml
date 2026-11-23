@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">Fernfable</string>
+    <string name="nav_grove">Grove</string>
+    <string name="nav_missions">Missions</string>
+    <string name="nav_puzzles">Puzzles</string>
+    <string name="nav_bestiary">Creatures</string>
+    <string name="nav_skills">Brain Skills</string>
+    <string name="hero_subtitle">Mythical Jungle Sanctuary</string>
+    <string name="daily_quest_title">Canopy Whisper</string>
+    <string name="quick_puzzle_cta">Anytime Brain Teaser</string>
+    <string name="cd_jungle_hero">Enchanted mythical jungle sanctuary at golden twilight</string>
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_hint">Show a gentle puzzle hint</string>
+    <string name="cd_reset_puzzle">Start a fresh puzzle</string>
+    <string name="cd_nectar">Sunbeam Nectar</string>
+    <string name="cd_moonstone">Moonstone Shards</string>
+    <string name="cd_toggle_audio">Toggle RPG music and jungle ambience</string>
+    <string name="audio_rpg_music_on">RPG Music On</string>
+    <string name="audio_jungle_ambience_on">Jungle Ambience On</string>
+    <string name="audio_muted">Sound Muted</string>
+    <string name="intro_skip">Skip Intro</string>
+    <string name="intro_begin_training">Begin Introductory Level</string>
+    <string name="intro_graduate_cta">Enter Solari Canopy (+20 Nectar)</string>
+    <string name="intro_glade_badge">Training Glade · Introductory Level</string>
+    <string name="intro_replay_cta">Replay Intro &amp; Tutorial</string>
+    <string name="a11y_calm_view">Calm View</string>
+    <string name="a11y_touch_to_speak">Touch to Speak</string>
+    <string name="cd_a11y_calm_view">Toggle simplified calm navigation mode without losing any features</string>
+    <string name="cd_a11y_touch_to_speak">Toggle text to speech when you touch an item on the screen</string>
+</resources>

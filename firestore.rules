@@ -1,0 +1,249 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened global primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.explorerName is string && data.explorerName.size() >= 1 && data.explorerName.size() <= 80 &&
+             data.selectedHeroId is string && isValidId(data.selectedHeroId) &&
+             data.heroLevel is int && data.heroLevel >= 1 && data.heroLevel <= 999 &&
+             data.heroExp is int && data.heroExp >= 0 && data.heroExp <= 10000000 &&
+             data.equippedRelicId is string && isValidId(data.equippedRelicId) &&
+             data.unlockedRelicsCsv is string && data.unlockedRelicsCsv.size() <= 500 &&
+             data.completedQuestsCsv is string && data.completedQuestsCsv.size() <= 500 &&
+             data.discoveredLoreCsv is string && data.discoveredLoreCsv.size() <= 1000 &&
+             data.nectar is int && data.nectar >= 0 && data.nectar <= 10000000 &&
+             data.moonstones is int && data.moonstones >= 0 && data.moonstones <= 10000000 &&
+             data.memoryXp is int && data.memoryXp >= 0 && data.memoryXp <= 10000000 &&
+             data.logicXp is int && data.logicXp >= 0 && data.logicXp <= 10000000 &&
+             data.spatialXp is int && data.spatialXp >= 0 && data.spatialXp <= 10000000 &&
+             data.deductionXp is int && data.deductionXp >= 0 && data.deductionXp <= 10000000 &&
+             data.observationXp is int && data.observationXp >= 0 && data.observationXp <= 10000000 &&
+             data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 1000000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 1000000 &&
+             data.totalPuzzlesSolved is int && data.totalPuzzlesSolved >= 0 && data.totalPuzzlesSolved <= 1000000 &&
+             data.gentleMode is bool &&
+             data.mana is int && data.mana >= 0 && data.mana <= 1000000 &&
+             data.magicEssence is int && data.magicEssence >= 0 && data.magicEssence <= 10000000 &&
+             data.communityProsperity is int && data.communityProsperity >= 0 && data.communityProsperity <= 100000 &&
+             data.completedMissionsCsv is string && data.completedMissionsCsv.size() <= 500 &&
+             data.lootBagCsv is string && data.lootBagCsv.size() <= 500 &&
+             data.canopyRestored is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 150));
+    }
+
+    function isValidCreatureProgress(data, creatureId) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.creatureId is string && data.creatureId == creatureId && isValidId(data.creatureId) &&
+             data.discovered is bool &&
+             data.bondLevel is int && data.bondLevel >= 0 && data.bondLevel <= 10 &&
+             data.bondXp is int && data.bondXp >= 0 && data.bondXp <= 10000000 &&
+             data.treatsFed is int && data.treatsFed >= 0 && data.treatsFed <= 1000000 &&
+             data.lastInteractionMillis is int && data.lastInteractionMillis >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPuzzleStats(data, puzzleType) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.puzzleType is string && data.puzzleType == puzzleType && isValidId(data.puzzleType) &&
+             data.accessed is bool &&
+             data.currentLevel is int && data.currentLevel >= 1 && data.currentLevel <= 9999 &&
+             data.totalStars is int && data.totalStars >= 0 && data.totalStars <= 10000000 &&
+             data.playedCount is int && data.playedCount >= 0 && data.playedCount <= 10000000 &&
+             data.solvedCount is int && data.solvedCount >= 0 && data.solvedCount <= 10000000 &&
+             data.bestScore is int && data.bestScore >= 0 && data.bestScore <= 10000000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 10000000 &&
+             data.lastSolvedMillis is int && data.lastSolvedMillis >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId} {
+      // Strictly owner-only access because document contains private profile & optional email PII
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'explorerName', 'selectedHeroId', 'heroLevel', 'heroExp',
+                         'equippedRelicId', 'unlockedRelicsCsv', 'completedQuestsCsv', 'discoveredLoreCsv',
+                         'nectar', 'moonstones', 'memoryXp', 'logicXp', 'spatialXp',
+                         'deductionXp', 'observationXp', 'currentStreak', 'bestStreak',
+                         'totalPuzzlesSolved', 'gentleMode', 'mana', 'magicEssence',
+                         'communityProsperity', 'completedMissionsCsv', 'lootBagCsv', 'canopyRestored',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'explorerName', 'displayName', 'email', 'selectedHeroId',
+                         'heroLevel', 'heroExp', 'equippedRelicId', 'unlockedRelicsCsv',
+                         'completedQuestsCsv', 'discoveredLoreCsv', 'nectar', 'moonstones',
+                         'memoryXp', 'logicXp', 'spatialXp', 'deductionXp', 'observationXp',
+                         'currentStreak', 'bestStreak', 'totalPuzzlesSolved', 'gentleMode',
+                         'mana', 'magicEssence', 'communityProsperity', 'completedMissionsCsv',
+                         'lootBagCsv', 'canopyRestored', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'explorerName', 'displayName', 'email', 'selectedHeroId',
+                         'heroLevel', 'heroExp', 'equippedRelicId', 'unlockedRelicsCsv',
+                         'completedQuestsCsv', 'discoveredLoreCsv', 'nectar', 'moonstones',
+                         'memoryXp', 'logicXp', 'spatialXp', 'deductionXp', 'observationXp',
+                         'currentStreak', 'bestStreak', 'totalPuzzlesSolved', 'gentleMode',
+                         'mana', 'magicEssence', 'communityProsperity', 'completedMissionsCsv',
+                         'lootBagCsv', 'canopyRestored', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /puzzle_completions/{eventId} {
+        allow get: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(eventId);
+
+        allow list: if false;
+
+        allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidId(eventId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().eventId == eventId &&
+        incoming().puzzleType is string &&
+        isValidId(incoming().puzzleType) &&
+        incoming().levelPlayed is int &&
+        incoming().levelPlayed >= 1 &&
+        incoming().levelPlayed <= 9999 &&
+        incoming().starsEarned is int &&
+        incoming().starsEarned >= 1 &&
+        incoming().starsEarned <= 3 &&
+        incoming().rawScore is int &&
+        incoming().rawScore >= 0 &&
+        incoming().rawScore <= 10000000 &&
+        incoming().completedAtMillis is int &&
+        incoming().completedAtMillis >= 0 &&
+        incoming().createdAt is timestamp &&
+        incoming().createdAt <= request.time &&
+        incoming().keys().hasAll([
+          'userId', 'eventId', 'puzzleType', 'levelPlayed',
+          'starsEarned', 'rawScore', 'completedAtMillis', 'createdAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'eventId', 'puzzleType', 'levelPlayed',
+          'starsEarned', 'rawScore', 'completedAtMillis', 'createdAt'
+        ]) &&
+        existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update, delete: if false;
+      }
+
+      match /creatures/{creatureId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(creatureId);
+        allow list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(creatureId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'creatureId', 'discovered', 'bondLevel',
+                           'bondXp', 'treatsFed', 'lastInteractionMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'creatureId', 'discovered', 'bondLevel',
+                           'bondXp', 'treatsFed', 'lastInteractionMillis',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCreatureProgress(incoming(), creatureId) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(creatureId) &&
+                         isValidCreatureProgress(incoming(), creatureId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().creatureId == existing().creatureId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'discovered', 'bondLevel', 'bondXp', 'treatsFed',
+                           'lastInteractionMillis', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(creatureId);
+      }
+
+      match /puzzle_stats/{puzzleType} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(puzzleType);
+        allow list: if isOwner(userId) && isValidId(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(puzzleType) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'puzzleType', 'accessed', 'currentLevel', 'totalStars',
+                           'playedCount', 'solvedCount', 'bestScore', 'bestStreak',
+                           'lastSolvedMillis', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'puzzleType', 'accessed', 'currentLevel', 'totalStars',
+                           'playedCount', 'solvedCount', 'bestScore', 'bestStreak',
+                           'lastSolvedMillis', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidPuzzleStats(incoming(), puzzleType) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(puzzleType) &&
+                         isValidPuzzleStats(incoming(), puzzleType) &&
+                         incoming().userId == existing().userId &&
+                         incoming().puzzleType == existing().puzzleType &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'accessed', 'currentLevel', 'totalStars', 'playedCount', 'solvedCount',
+                           'bestScore', 'bestStreak', 'lastSolvedMillis', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(puzzleType);
+      }
+    }
+  }
+}

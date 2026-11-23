@@ -1,0 +1,605 @@
+package com.example.ui
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.rounded.AutoStories
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.R
+import com.example.audio.AudioScene
+import com.example.audio.FernfableAudioManager
+import com.example.data.RpgMissionCatalog
+import com.example.model.MissionCompletionSummary
+import com.example.model.PuzzleCompletionResult
+import com.example.model.PuzzleType
+import com.example.navigation.FernfableRoutes
+import com.example.navigation.TopDestination
+import com.example.rpg.IntroStage
+import com.example.stateHolder.FernfableUiState
+import com.example.ui.components.ComfortAccessibilityBar
+import com.example.ui.components.LocalAccessibilityUi
+import com.example.ui.components.ProvideFernfableAccessibility
+import com.example.ui.components.speakOnTouch
+import com.example.ui.screens.BestiaryScreen
+import com.example.ui.screens.BrainSkillsScreen
+import com.example.ui.screens.GroveScreen
+import com.example.ui.screens.IntroTutorialScreen
+import com.example.ui.screens.MissionBattleSheet
+import com.example.ui.screens.MissionsScreen
+import com.example.ui.screens.OpeningCutsceneScreen
+import com.example.ui.screens.PuzzleHubScreen
+import com.example.ui.screens.PuzzlePlayScreen
+import com.example.viewmodel.FernfableViewModel
+import com.example.viewmodel.IntroViewModel
+
+private val topDestinations = listOf(
+    TopDestination(
+        route = FernfableRoutes.GROVE,
+        labelRes = R.string.nav_grove,
+        selectedIcon = Icons.Rounded.Explore,
+        unselectedIcon = Icons.Outlined.Explore,
+        testTag = "nav_grove",
+        spokenDescription = "Grove tab. Explore the jungle world and story chapters."
+    ),
+    TopDestination(
+        route = FernfableRoutes.MISSIONS,
+        labelRes = R.string.nav_missions,
+        selectedIcon = Icons.Rounded.Flag,
+        unselectedIcon = Icons.Outlined.Flag,
+        testTag = "nav_missions",
+        spokenDescription = "Missions tab. Build community projects and battle wild creatures."
+    ),
+    TopDestination(
+        route = FernfableRoutes.PUZZLES,
+        labelRes = R.string.nav_puzzles,
+        selectedIcon = Icons.Rounded.Extension,
+        unselectedIcon = Icons.Outlined.Extension,
+        testTag = "nav_puzzles",
+        spokenDescription = "Puzzles tab. Replay discovered brain teaser puzzles for higher scores."
+    ),
+    TopDestination(
+        route = FernfableRoutes.BESTIARY,
+        labelRes = R.string.nav_bestiary,
+        selectedIcon = Icons.Rounded.AutoStories,
+        unselectedIcon = Icons.Outlined.AutoStories,
+        testTag = "nav_bestiary",
+        spokenDescription = "Creatures tab. Visit and feed mythical jungle friends."
+    ),
+    TopDestination(
+        route = FernfableRoutes.SKILLS,
+        labelRes = R.string.nav_skills,
+        selectedIcon = Icons.Rounded.Psychology,
+        unselectedIcon = Icons.Outlined.Psychology,
+        testTag = "nav_skills",
+        spokenDescription = "Brain Skills tab. View your cognitive progress and badges."
+    )
+)
+
+@Composable
+fun FernfableApp(
+    viewModel: IntroViewModel,
+    userEmail: String? = null,
+    onSignOut: () -> Unit = {},
+    fernfableViewModel: FernfableViewModel
+) {
+    ProvideFernfableAccessibility {
+        FernfableAppShell(
+            fernfableViewModel = fernfableViewModel,
+            viewModel = viewModel,
+            userEmail = userEmail,
+            onSignOut = onSignOut
+        )
+    }
+}
+
+@Composable
+private fun FernfableAppShell(
+    viewModel: IntroViewModel,
+    userEmail: String?,
+    onSignOut: () -> Unit,
+    fernfableViewModel: FernfableViewModel
+) {
+    val navController = rememberNavController()
+    val introUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by fernfableViewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val isPlayingPuzzle = currentRoute == FernfableRoutes.PLAY_PUZZLE
+    val audioManager = remember(context.applicationContext) {
+        FernfableAudioManager(context.applicationContext)
+    }
+    val missionSummary by fernfableViewModel.missionSummary.collectAsStateWithLifecycle()
+    val completionResult by fernfableViewModel.completionResult.collectAsStateWithLifecycle()
+    val isIntroShrinePuzzle by
+    fernfableViewModel.isIntroShrinePuzzle.collectAsStateWithLifecycle()
+
+    DisposableEffect(lifecycleOwner, audioManager) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> audioManager.onForegroundChanged(true)
+                Lifecycle.Event.ON_PAUSE -> audioManager.onForegroundChanged(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            audioManager.release()
+        }
+    }
+
+    LaunchedEffect(completionResult, isIntroShrinePuzzle, currentRoute) {
+        if (
+            completionResult != null &&
+            isIntroShrinePuzzle &&
+            currentRoute == FernfableRoutes.PLAY_PUZZLE
+        ) {
+            viewModel.completeIntroShrinePuzzle()
+            fernfableViewModel.dismissCompletion()
+            navController.popBackStack()
+        }
+    }
+
+    LaunchedEffect(missionSummary) {
+        val summary = missionSummary ?: return@LaunchedEffect
+
+        if (
+            summary.victory &&
+            summary.mission.id == RpgMissionCatalog.introMission.id
+        ) {
+            viewModel.completeIntroBattle()
+        }
+    }
+
+    LaunchedEffect(isPlayingPuzzle) {
+        audioManager.setScene(
+            if (isPlayingPuzzle) AudioScene.PUZZLE_AMBIENT else AudioScene.RPG_MUSIC
+        )
+    }
+
+    LaunchedEffect(introUiState.snackbarMessage) {
+        val msg = introUiState.snackbarMessage
+        if (msg != null) {
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearSnackbar()
+        }
+    }
+
+    LaunchedEffect(introUiState.snackbarMessage) {
+        val msg = introUiState.snackbarMessage
+        if (msg != null) {
+            snackbarHostState.showSnackbar(msg)
+            fernfableViewModel.clearSnackbar()
+        }
+    }
+
+    fun navigateTop(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    fun launchPuzzle(
+        type: PuzzleType,
+        levelOverride: Int? = null,
+        accessedFromRpg: Boolean = true
+    ) {
+        fernfableViewModel.startPuzzle(type, levelOverride, accessedFromRpg = accessedFromRpg)
+        navController.navigate(FernfableRoutes.PLAY_PUZZLE) {
+            launchSingleTop = true
+        }
+    }
+
+    JungleAtmosphereBackground(
+        fernfableViewModel,
+        viewModel,
+        isPlayingPuzzle,
+        snackbarHostState,
+        ::navigateTop,
+        ::launchPuzzle,
+        onSignOut,
+        userEmail,
+        backStackEntry,
+        navController,
+        uiState,
+        audioManager,
+        completionResult,
+        missionSummary
+    )
+}
+
+@Composable
+fun JungleAtmosphereBackground(
+    fernfableViewModel: FernfableViewModel = viewModel(),
+    introViewModel: IntroViewModel,
+    isPlayingPuzzle: Boolean,
+    snackbarHostState: SnackbarHostState,
+    navigateTop: (String) -> Unit,
+    launchPuzzle: (PuzzleType, Int?, Boolean) -> Unit,
+    onSignOut: () -> Unit,
+    userEmail: String?,
+    backStackEntry: NavBackStackEntry?,
+    navController: NavHostController,
+    uiState: FernfableUiState,
+    audioManager: FernfableAudioManager,
+    completionResult: PuzzleCompletionResult?,
+    missionSummary: MissionCompletionSummary?
+) {
+    val activeEncounter by fernfableViewModel.activeEncounter.collectAsStateWithLifecycle()
+    val encounterFeedback by fernfableViewModel.encounterFeedback.collectAsStateWithLifecycle()
+    val activePuzzleType by fernfableViewModel.activePuzzleType.collectAsStateWithLifecycle()
+    val activePuzzleLevel by fernfableViewModel.activePuzzleLevel.collectAsStateWithLifecycle()
+    val fireflyState by fernfableViewModel.fireflyState.collectAsStateWithLifecycle()
+    val mushroomState by fernfableViewModel.mushroomState.collectAsStateWithLifecycle()
+    val mushroomSelectedSlot by fernfableViewModel.mushroomSelectedSlot.collectAsStateWithLifecycle()
+    val fernMosaicState by fernfableViewModel.fernMosaicState.collectAsStateWithLifecycle()
+    val mosaicStatus by fernfableViewModel.mosaicStatus.collectAsStateWithLifecycle()
+    val canopySpotterState by fernfableViewModel.canopySpotterState.collectAsStateWithLifecycle()
+    val spotterStatus by fernfableViewModel.spotterStatus.collectAsStateWithLifecycle()
+    val groveGridState by fernfableViewModel.groveGridState.collectAsStateWithLifecycle()
+    val selectedGridCell by fernfableViewModel.selectedGridCell.collectAsStateWithLifecycle()
+    val vineWeaverState by fernfableViewModel.vineWeaverState.collectAsStateWithLifecycle()
+    val spiritLockState by fernfableViewModel.spiritLockState.collectAsStateWithLifecycle()
+    val activeBattle by fernfableViewModel.activeBattle.collectAsStateWithLifecycle()
+    val worldState by fernfableViewModel.worldState.collectAsStateWithLifecycle()
+    val calmMode = LocalAccessibilityUi.current.calmMode
+    val isProfileLoaded by fernfableViewModel.isProfileLoaded.collectAsStateWithLifecycle()
+    val isRecordingMissionReward by fernfableViewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
+    val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
+    val introCompletedLocally by
+    fernfableViewModel.introCompletedLocally.collectAsStateWithLifecycle()
+    val isInOnboarding = !isProfileLoaded || (!uiState.profile.introCompleted && !introCompletedLocally)
+    val introState by fernfableViewModel.introState.collectAsStateWithLifecycle()
+    val screenWidthDp = LocalWindowInfo.current.containerSize.width
+    val useRail = screenWidthDp >= 600
+    val pendingDatabaseRetry by
+    fernfableViewModel.pendingDatabaseRetry.collectAsStateWithLifecycle()
+
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (!useRail && !isPlayingPuzzle && !isInOnboarding) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.94f)
+                ) {
+                    topDestinations.forEach { dest ->
+                        val selected = backStackEntry?.destination?.hierarchy?.any {
+                            it.route == dest.route
+                        } == true
+                        val label = stringResource(dest.labelRes)
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navigateTop(dest.route) },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) dest.selectedIcon else dest.unselectedIcon,
+                                    contentDescription = label
+                                )
+                            },
+                            label = { Text(label) },
+                            modifier = Modifier
+                                .speakOnTouch(dest.spokenDescription)
+                                .testTag(dest.testTag)
+                        )
+                    }
+                }
+            }
+        }
+
+
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            ComfortAccessibilityBar()
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                if (useRail && !isPlayingPuzzle && !isInOnboarding) {
+                    NavigationRail(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.92f)
+                    ) {
+                        topDestinations.forEach { dest ->
+                            val selected = backStackEntry?.destination?.hierarchy?.any {
+                                it.route == dest.route
+                            } == true
+                            val label = stringResource(dest.labelRes)
+                            NavigationRailItem(
+                                selected = selected,
+                                onClick = { navigateTop(dest.route) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) dest.selectedIcon else dest.unselectedIcon,
+                                        contentDescription = label
+                                    )
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier
+                                    .speakOnTouch(dest.spokenDescription)
+                                    .testTag(dest.testTag)
+                            )
+                        }
+                    }
+                }
+
+                NavHost(
+                    navController = navController,
+                    startDestination = FernfableRoutes.GROVE,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    composable(FernfableRoutes.GROVE) {
+                        if (!isProfileLoaded) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            }
+                        } else if (!uiState.profile.introCompleted && !introCompletedLocally) {
+                            if (introState.stage == IntroStage.CUTSCENE) {
+                                OpeningCutsceneScreen(
+                                    page = introState.cutscenePage,
+                                    heroId = uiState.profile.selectedHeroId,
+                                    isAudioMuted = isAudioMuted,
+                                    onToggleAudioMute = audioManager::toggleMute,
+                                    onPageChange = introViewModel::setCutscenePage,
+                                    onBeginTraining = introViewModel::beginIntroTrainingLevel,
+                                    onSkipIntro = introViewModel::skipIntroTutorial
+                                )
+                            } else {
+                                IntroTutorialScreen(
+                                    introState = introState,
+                                    heroId = uiState.profile.selectedHeroId,
+                                    heroLevel = uiState.profile.heroLevel,
+                                    mana = uiState.profile.mana,
+                                    maxMana = uiState.profile.maxMana,
+                                    nectar = uiState.profile.nectar,
+                                    isAudioMuted = isAudioMuted,
+                                    hasActiveBattle = activeBattle != null,
+                                    onToggleAudioMute = audioManager::toggleMute,
+                                    onSkipIntro = introViewModel::skipIntroTutorial,
+                                    onGraduateToWorld = introViewModel::completeIntroGraduation,
+                                    onStepFrame = introViewModel::stepIntroWorldFrame,
+                                    onSetTapTarget = introViewModel::setIntroTapTarget,
+                                    onInteractLantern = introViewModel::interactWithIntroLantern,
+                                    onLaunchIntroPuzzle = { type -> launchPuzzle(type, 1, true) },
+                                    onStartIntroBattle = introViewModel::startMission,
+                                    onRestMana = fernfableViewModel::restManaAtSanctuary,
+                                    onShowDialogue = introViewModel::showIntroDialogue,
+                                    onDismissDialogue = introViewModel::dismissIntroDialogue
+                                )
+                            }
+                        } else {
+                            GroveScreen(
+                                uiState = uiState,
+                                worldState = worldState,
+                                hasActiveBattle = activeBattle != null,
+                                activeEncounter = activeEncounter,
+                                encounterFeedback = encounterFeedback,
+                                userEmail = userEmail,
+                                isAudioMuted = isAudioMuted,
+                                onToggleAudioMute = audioManager::toggleMute,
+                                onSignOut = onSignOut,
+                                onOpenBiome = fernfableViewModel::openBiomeEncounter,
+                                onDismissEncounter = fernfableViewModel::dismissEncounter,
+                                onChooseStoryOption = fernfableViewModel::chooseStoryOption,
+                                onSelectHero = fernfableViewModel::selectHero,
+                                onCraftOrEquipRelic = fernfableViewModel::craftOrEquipRelic,
+                                onLaunchPuzzle = { type -> launchPuzzle(type, null, true) },
+                                onOpenPuzzleHub = { navigateTop(FernfableRoutes.PUZZLES) },
+                                onOpenMissions = { navigateTop(FernfableRoutes.MISSIONS) },
+                                onStepWorldFrame = fernfableViewModel::stepWorldFrame,
+                                onSetWorldTapTarget = fernfableViewModel::setWorldTapTarget,
+                                onShowWorldDialogue = fernfableViewModel::showWorldDialogue,
+                                onDismissWorldDialogue = fernfableViewModel::dismissWorldDialogue,
+                                onPostWorldToast = fernfableViewModel::postWorldToast,
+                                onInteractLantern = fernfableViewModel::interactWithWorldLantern,
+                                onForageObject = fernfableViewModel::forageWorldObject,
+                                onRestMana = fernfableViewModel::restManaAtSanctuary,
+                                onStartWorldMission = fernfableViewModel::startMission,
+                                onReplayIntro = introViewModel::replayIntroTutorial
+                            )
+                        }
+                    }
+
+                    composable(FernfableRoutes.MISSIONS) {
+                        MissionsScreen(
+                            uiState = uiState,
+                            onStartMission = fernfableViewModel::startMission,
+                            onRestMana = fernfableViewModel::restManaAtSanctuary,
+                            onBrewLoot = fernfableViewModel::brewBattleLoot,
+                            onLaunchPuzzle = { type -> launchPuzzle(type, null, true) }
+                        )
+                    }
+
+                    composable(FernfableRoutes.PUZZLES) {
+                        PuzzleHubScreen(
+                            uiState = uiState,
+                            onSelectDifficulty = fernfableViewModel::setDifficulty,
+                            onToggleGentleMode = fernfableViewModel::setGentleMode,
+                            onStartPuzzle = { type, level -> launchPuzzle(type, level, false) },
+                            onNavigateToGrove = { navigateTop(FernfableRoutes.GROVE) },
+                            onNavigateToMissions = { navigateTop(FernfableRoutes.MISSIONS) }
+                        )
+                    }
+
+                    composable(FernfableRoutes.BESTIARY) {
+                        BestiaryScreen(
+                            uiState = uiState,
+                            onFeedCreature = fernfableViewModel::feedCreature,
+                            onPlaySignaturePuzzle = { type -> launchPuzzle(type, null, true) }
+                        )
+                    }
+
+                    composable(FernfableRoutes.SKILLS) {
+                        BrainSkillsScreen(
+                            uiState = uiState,
+                            onTrainSkill = { type -> launchPuzzle(type, null, false) },
+                            onExploreRpg = { navigateTop(FernfableRoutes.GROVE) }
+                        )
+                    }
+
+                    composable(FernfableRoutes.PLAY_PUZZLE) {
+                        PuzzlePlayScreen(
+                            puzzleType = activePuzzleType,
+                            level = activePuzzleLevel,
+                            difficulty = uiState.selectedDifficulty,
+                            gentleMode = uiState.profile.gentleMode,
+                            isAudioMuted = isAudioMuted,
+                            onToggleAudioMute = audioManager::toggleMute,
+                            fireflyState = fireflyState,
+                            mushroomState = mushroomState,
+                            mushroomSelectedSlot = mushroomSelectedSlot,
+                            fernMosaicState = fernMosaicState,
+                            mosaicStatus = mosaicStatus,
+                            canopySpotterState = canopySpotterState,
+                            spotterStatus = spotterStatus,
+                            groveGridState = groveGridState,
+                            selectedGridCell = selectedGridCell,
+                            vineWeaverState = vineWeaverState,
+                            spiritLockState = spiritLockState,
+                            completionResult = completionResult,
+                            onBack = {
+                                fernfableViewModel.dismissCompletion()
+                                navController.popBackStack()
+                            },
+                            onRestartLevel = { level ->
+                                fernfableViewModel.startPuzzle(
+                                    activePuzzleType,
+                                    level
+                                )
+                            },
+                            onTapBlossom = fernfableViewModel::tapFireflyBlossom,
+                            onReplayFireflyHint = fernfableViewModel::replayFireflyHint,
+                            onTapMushroomSlot = fernfableViewModel::tapMushroomSlot,
+                            onUseMushroomHint = fernfableViewModel::useMushroomHint,
+                            onSelectMosaicSlot = fernfableViewModel::selectMosaicSlot,
+                            onChooseMosaicTile = fernfableViewModel::chooseMosaicTile,
+                            onUseMosaicHint = fernfableViewModel::useMosaicHint,
+                            onTapSpotterCharm = fernfableViewModel::tapSpotterCharm,
+                            onUseSpotterHint = fernfableViewModel::useSpotterHint,
+                            onSelectGridCell = fernfableViewModel::selectGridCell,
+                            onPlaceGridRune = fernfableViewModel::placeGridRune,
+                            onUseGridHint = fernfableViewModel::useGridHint,
+                            onRotateVineTile = fernfableViewModel::rotateVineTile,
+                            onUseVineHint = fernfableViewModel::useVineHint,
+                            onAppendDraftRune = fernfableViewModel::appendDraftRune,
+                            onRemoveLastDraftRune = fernfableViewModel::removeLastDraftRune,
+                            onSubmitSpiritDraft = fernfableViewModel::submitSpiritDraft,
+                            onUseSpiritHint = fernfableViewModel::useSpiritHint,
+                            onDismissCompletion = fernfableViewModel::dismissCompletion
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    pendingDatabaseRetry?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = fernfableViewModel::cancelPendingDatabaseRetry,
+            title = {
+                Text("Couldn’t save to the cloud")
+            },
+            text = {
+                Text(
+                    "${prompt.operation} failed.\n\n" +
+                            "${prompt.error}\n\n" +
+                            "Retry the save, or choose Don’t save to cancel it."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = fernfableViewModel::retryPendingDatabaseOperation) {
+                    Text("Retry")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = fernfableViewModel::cancelPendingDatabaseRetry) {
+                    Text("Don’t save")
+                }
+            }
+        )
+    }
+
+    val currentBattle = activeBattle
+    if (currentBattle != null) {
+        MissionBattleSheet(
+            battleState = currentBattle,
+            heroId = uiState.profile.selectedHeroId,
+            missionSummary = missionSummary,
+            onAdvanceCommunityStep = fernfableViewModel::advanceMissionCommunityStep,
+            onPerformAction = fernfableViewModel::performBattleAction,
+            onUseLoot = fernfableViewModel::useBattleLoot,
+            onRetreat = fernfableViewModel::retreatFromBattle,
+            onDismiss = fernfableViewModel::dismissMissionSheet,
+            isRecordingMissionReward = isRecordingMissionReward,
+            onLaunchPuzzle = { type, _, _ -> launchPuzzle(type, null, true) }
+        )
+    }
+}
