@@ -306,9 +306,9 @@ fun JungleAtmosphereBackground(
     val isRecordingMissionReward by fernfableViewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
     val introCompletedLocally by
-    fernfableViewModel.introCompletedLocally.collectAsStateWithLifecycle()
+    introViewModel.introCompletedLocally.collectAsStateWithLifecycle()
     val isInOnboarding = !isProfileLoaded || (!uiState.profile.introCompleted && !introCompletedLocally)
-    val introState by fernfableViewModel.introState.collectAsStateWithLifecycle()
+    val introState by introViewModel.introState.collectAsStateWithLifecycle()
     val screenWidthDp = LocalWindowInfo.current.containerSize.width
     val useRail = screenWidthDp >= 600
     val pendingDatabaseRetry by

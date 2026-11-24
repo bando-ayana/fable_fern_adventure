@@ -174,7 +174,7 @@ class GameRepository(
                 val streak = profile.currentStreak + 1
                 val nextLevel = maxOf(stats.currentLevel, levelPlayed + 1)
 
-                val profileUpdates = mutableMapOf<String, Any>(
+                val profileUpdates = mutableMapOf(
                     "heroLevel" to heroLevel,
                     "heroExp" to heroExp,
                     "nectar" to profile.nectar + nectar,
