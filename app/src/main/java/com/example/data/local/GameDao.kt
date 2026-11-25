@@ -48,11 +48,15 @@ interface GameDao {
     @Query("DELETE FROM pending_mission_outcomes WHERE eventId = :eventId")
     suspend fun deletePendingMissionOutcome(eventId: String)
 
-    @Query("SELECT * FROM player_profile WHERE id = 1")
-    fun observeProfile(): Flow<PlayerProfileEntity?>
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPendingRewards(event: PendingProfileRewardEntity)
 
-    @Query("SELECT * FROM player_profile WHERE id = 1")
-    suspend fun getProfileOnce(): PlayerProfileEntity?
+
+    @Query("SELECT * FROM player_profile WHERE id = :userId")
+    fun observeProfile(userId: String): Flow<PlayerProfileEntity?>
+
+    @Query("SELECT * FROM player_profile WHERE id = :userId")
+    suspend fun playerProfileEntity(userId: String): PlayerProfileEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProfile(profile: PlayerProfileEntity)

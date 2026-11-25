@@ -446,7 +446,7 @@ class GameRepository(
                 moonstones = (previous?.moonstones ?: 0) + moonstoneReward,
                 skillXp = (previous?.skillXp ?: 0) + skillXpReward
             )
-
+//TODO add missing fields and their corresponding values
             dao.upsertLocalPuzzleProgress(progress)
             dao.insertPendingCompletion(
                 PendingPuzzleCompletionEntity(
@@ -603,7 +603,7 @@ class GameRepository(
         remainingMana: Int,
         usedLootInBattle: Map<LootItemType, Int>
     ): MissionCompletionSummary {
-        val localProfile = localDatabase.gameDao().getProfileOnce()
+        val localProfile = localDatabase.gameDao().playerProfileEntity(userId)
             ?: PlayerProfileEntity()
 
         try {

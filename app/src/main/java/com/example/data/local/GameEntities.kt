@@ -123,6 +123,10 @@ data class PendingPuzzleCompletionEntity(
     val levelPlayed: Int,
     val starsEarned: Int,
     val rawScore: Int,
+    val heroXpGain: Int,
+    val skillXpGain: Int,
+    val moonstonesGain: Int,
+    val nectarGain: Int,
     val completedAtMillis: Long
 )
 
@@ -142,6 +146,7 @@ data class PendingMissionOutcomeEntity(
 data class PendingProfileRewardEntity(
     @PrimaryKey val eventId: String,
     val userId: String,
+    val heroId: String,
     val heroExpGain: Int,
     val nectarGain: Int,
     val moonstonesGain: Int,
