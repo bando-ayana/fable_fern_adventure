@@ -891,7 +891,8 @@ class PuzzleViewModel(
                         rawScore = rawScore,
                         cloudStats =
                             sanctuaryUiState.value
-                                .puzzleStats[type]
+                                .puzzleStats[type],
+                        profile = sanctuaryUiState.value.profile
                     )
                 _completionResult.value = result
             }

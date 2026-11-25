@@ -2,6 +2,8 @@ package com.example.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -139,6 +141,19 @@ fun RpgWorldViewport(
     }
     val effectiveAnimTime = if (a11y.calmMode) 0f else animTime
 
+    val sunBridgeBuilt = RpgWorldEngine.isSunBridgeLowered(completedMissions)
+    val eastBridgeBuilt = RpgWorldEngine.isEastBridgeLowered(completedMissions)
+    val sunBridgeFill by animateFloatAsState(
+        targetValue = if (sunBridgeBuilt) 1f else 0f,
+        animationSpec = tween(durationMillis = if (a11y.calmMode) 0 else 850),
+        label = "sun_bridge_fill"
+    )
+    val eastBridgeFill by animateFloatAsState(
+        targetValue = if (eastBridgeBuilt) 1f else 0f,
+        animationSpec = tween(durationMillis = if (a11y.calmMode) 0 else 850),
+        label = "east_bridge_fill"
+    )
+
     val nearestTarget = remember(
         worldState.heroX,
         worldState.heroY,
@@ -208,8 +223,9 @@ fun RpgWorldViewport(
             val minTy = ((camY / tilePx).toInt() - 1).coerceAtLeast(0)
             val maxTy = (((camY + size.height) / tilePx).toInt() + 1).coerceAtMost(RpgWorldEngine.MAP_HEIGHT - 1)
 
-            val bridgeBuilt = "mission_sunbridge" in completedMissions
-            val aqueductRestored = "mission_aqueduct_gate" in completedMissions
+            val bridgeBuilt = RpgWorldEngine.isSunBridgeLowered(completedMissions)
+            val eastBridgeBuilt = RpgWorldEngine.isEastBridgeLowered(completedMissions)
+            val aqueductRestored = RpgWorldEngine.isEastBridgeLowered(completedMissions)
 
             // 1. Draw Terrain Tiles
             for (ty in minTy..maxTy) {
@@ -226,6 +242,9 @@ fun RpgWorldViewport(
                         tilePx = tilePx,
                         animTime = effectiveAnimTime,
                         bridgeBuilt = bridgeBuilt,
+                        eastBridgeBuilt = eastBridgeBuilt,
+                        sunBridgeProgress = sunBridgeFill,
+                        eastBridgeProgress = eastBridgeFill,
                         aqueductRestored = aqueductRestored
                     )
                 }
@@ -735,8 +754,8 @@ private fun WorldMinimapOverlay(
 
             val mapWidthDp = if (expanded) 268.dp else 132.dp
             val mapHeightDp = if (expanded) 204.dp else 102.dp
-            val bridgeBuilt = "mission_sunbridge" in completedMissions
-            val aqueductRestored = "mission_aqueduct_gate" in completedMissions
+            val bridgeBuilt = RpgWorldEngine.isSunBridgeLowered(completedMissions)
+            val eastBridgeBuilt = RpgWorldEngine.isEastBridgeLowered(completedMissions)
 
             Canvas(
                 modifier = Modifier
@@ -768,8 +787,9 @@ private fun WorldMinimapOverlay(
                         val color = when (RpgWorldEngine.tileAt(tx, ty)) {
                             WorldTile.CLIFF_TREE -> Color(0xFF153624)
                             WorldTile.WATER -> Color(0xFF216D7E)
-                            WorldTile.SUN_BRIDGE_SITE -> if (bridgeBuilt) Color(0xFFC29044) else Color(0xFF5D5342)
-                            WorldTile.AQUEDUCT_CHANNEL -> if (aqueductRestored) Color(0xFF339BB0) else Color(0xFF3A4942)
+                            WorldTile.SUN_BRIDGE_SITE -> if (bridgeBuilt) Color(0xFFC29044) else Color(0xFF394D54)
+                            WorldTile.EAST_BRIDGE_SITE -> if (eastBridgeBuilt) Color(0xFFC29044) else Color(0xFF394D54)
+                            WorldTile.AQUEDUCT_CHANNEL -> if (eastBridgeBuilt) Color(0xFF339BB0) else Color(0xFF3A4942)
                             WorldTile.SOLAR_WALKWAY -> Color(0xFF937743)
                             WorldTile.SHRINE_STONE -> Color(0xFF52486C)
                             WorldTile.MOSS_PATH -> Color(0xFF5D553D)
@@ -1120,6 +1140,9 @@ internal fun DrawScope.drawWorldTile(
     tilePx: Float,
     animTime: Float,
     bridgeBuilt: Boolean,
+    eastBridgeBuilt: Boolean = false,
+    sunBridgeProgress: Float = if (bridgeBuilt) 1f else 0f,
+    eastBridgeProgress: Float = if (eastBridgeBuilt) 1f else 0f,
     aqueductRestored: Boolean
 ) {
     val tileSize = Size(tilePx + 1f, tilePx + 1f)
@@ -1194,31 +1217,29 @@ internal fun DrawScope.drawWorldTile(
         }
 
         WorldTile.SUN_BRIDGE_SITE -> {
-            drawRect(
-                color = Color(0xFF195F73),
-                topLeft = Offset(left, top),
-                size = tileSize
+            drawBridgeSpanTile(
+                left = left,
+                top = top,
+                tilePx = tilePx,
+                tx = tx,
+                ty = ty,
+                animTime = animTime,
+                fillProgress = if (bridgeBuilt) sunBridgeProgress.coerceIn(0f, 1f) else 0f,
+                verticalCrossing = true
             )
-            val plankColor = if (bridgeBuilt) Color(0xFFB58038) else Color(0xFF6B5642)
-            drawRect(
-                color = plankColor,
-                topLeft = Offset(left + tilePx * 0.08f, top),
-                size = Size(tilePx * 0.84f, tilePx)
+        }
+
+        WorldTile.EAST_BRIDGE_SITE -> {
+            drawBridgeSpanTile(
+                left = left,
+                top = top,
+                tilePx = tilePx,
+                tx = tx,
+                ty = ty,
+                animTime = animTime,
+                fillProgress = if (eastBridgeBuilt) eastBridgeProgress.coerceIn(0f, 1f) else 0f,
+                verticalCrossing = false
             )
-            if (bridgeBuilt) {
-                drawLine(
-                    color = FireflyGoldAccent,
-                    start = Offset(left + tilePx * 0.10f, top),
-                    end = Offset(left + tilePx * 0.10f, top + tilePx),
-                    strokeWidth = 4f
-                )
-                drawLine(
-                    color = FireflyGoldAccent,
-                    start = Offset(left + tilePx * 0.90f, top),
-                    end = Offset(left + tilePx * 0.90f, top + tilePx),
-                    strokeWidth = 4f
-                )
-            }
         }
 
         WorldTile.AQUEDUCT_CHANNEL -> {
@@ -1278,6 +1299,146 @@ internal fun DrawScope.drawWorldTile(
                 color = Color(0xFF217042),
                 radius = tilePx * 0.30f,
                 center = Offset(left + tilePx * 0.46f + sway, top + tilePx * 0.34f)
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawBridgeSpanTile(
+    left: Float,
+    top: Float,
+    tilePx: Float,
+    tx: Int,
+    ty: Int,
+    animTime: Float,
+    fillProgress: Float,
+    verticalCrossing: Boolean
+) {
+    val tileSize = Size(tilePx + 1f, tilePx + 1f)
+    // Flowing river underneath the span
+    drawRect(
+        color = Color(0xFF195F73),
+        topLeft = Offset(left, top),
+        size = tileSize
+    )
+    val ripple = sin(animTime * 2.5f + tx * 0.8f + ty) * tilePx * 0.05f
+    drawLine(
+        color = Color(0xFF6CDDF0).copy(alpha = 0.42f * (1f - fillProgress * 0.65f)),
+        start = Offset(left + tilePx * 0.16f, top + tilePx * 0.48f + ripple),
+        end = Offset(left + tilePx * 0.84f, top + tilePx * 0.48f + ripple),
+        strokeWidth = 2.5f
+    )
+
+    if (fillProgress <= 0.05f) {
+        // Raised / unbuilt bridge: stone pier stubs, retracted winch ropes, dashed outline
+        if (verticalCrossing) {
+            drawRect(
+                color = Color(0xFF4F5D57),
+                topLeft = Offset(left + tilePx * 0.08f, top),
+                size = Size(tilePx * 0.84f, tilePx * 0.16f)
+            )
+            drawRect(
+                color = Color(0xFF4F5D57),
+                topLeft = Offset(left + tilePx * 0.08f, top + tilePx * 0.84f),
+                size = Size(tilePx * 0.84f, tilePx * 0.16f)
+            )
+        } else {
+            drawRect(
+                color = Color(0xFF4F5D57),
+                topLeft = Offset(left, top + tilePx * 0.08f),
+                size = Size(tilePx * 0.16f, tilePx * 0.84f)
+            )
+            drawRect(
+                color = Color(0xFF4F5D57),
+                topLeft = Offset(left + tilePx * 0.84f, top + tilePx * 0.08f),
+                size = Size(tilePx * 0.16f, tilePx * 0.84f)
+            )
+        }
+        drawRoundRect(
+            color = FireflyGoldAccent.copy(alpha = 0.72f),
+            topLeft = Offset(left + tilePx * 0.12f, top + tilePx * 0.12f),
+            size = Size(tilePx * 0.76f, tilePx * 0.76f),
+            cornerRadius = CornerRadius(6f, 6f),
+            style = Stroke(
+                width = 2.2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+            )
+        )
+        drawCircle(
+            color = FireflyGoldAccent.copy(alpha = 0.85f),
+            radius = tilePx * 0.09f,
+            center = Offset(left + tilePx * 0.5f, top + tilePx * 0.5f)
+        )
+        return
+    }
+
+    // Progressive plank-by-plank lowering / filling
+    val numPlanks = 4
+    val plankPad = tilePx * 0.08f
+    for (idx in 0 until numPlanks) {
+        val plankAlpha = ((fillProgress * numPlanks) - idx).coerceIn(0f, 1f)
+        if (plankAlpha > 0.02f) {
+            if (verticalCrossing) {
+                val pH = (tilePx / numPlanks) * 0.82f * plankAlpha
+                val pY = top + idx * (tilePx / numPlanks) + tilePx * 0.03f
+                drawRoundRect(
+                    color = Color(0xFF8C5B32).copy(alpha = plankAlpha),
+                    topLeft = Offset(left + plankPad, pY),
+                    size = Size(tilePx - plankPad * 2f, pH.coerceAtLeast(2f)),
+                    cornerRadius = CornerRadius(4f, 4f)
+                )
+                drawLine(
+                    color = Color(0xFFC29044).copy(alpha = plankAlpha * 0.7f),
+                    start = Offset(left + plankPad + 2f, pY + pH * 0.35f),
+                    end = Offset(left + tilePx - plankPad - 2f, pY + pH * 0.35f),
+                    strokeWidth = 1.6f
+                )
+            } else {
+                val pW = (tilePx / numPlanks) * 0.82f * plankAlpha
+                val pX = left + idx * (tilePx / numPlanks) + tilePx * 0.03f
+                drawRoundRect(
+                    color = Color(0xFF8C5B32).copy(alpha = plankAlpha),
+                    topLeft = Offset(pX, top + plankPad),
+                    size = Size(pW.coerceAtLeast(2f), tilePx - plankPad * 2f),
+                    cornerRadius = CornerRadius(4f, 4f)
+                )
+                drawLine(
+                    color = Color(0xFFC29044).copy(alpha = plankAlpha * 0.7f),
+                    start = Offset(pX + pW * 0.35f, top + plankPad + 2f),
+                    end = Offset(pX + pW * 0.35f, top + tilePx - plankPad - 2f),
+                    strokeWidth = 1.6f
+                )
+            }
+        }
+    }
+
+    if (fillProgress >= 0.7f) {
+        val railAlpha = ((fillProgress - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        if (verticalCrossing) {
+            drawLine(
+                color = FireflyGoldAccent.copy(alpha = railAlpha),
+                start = Offset(left + tilePx * 0.10f, top),
+                end = Offset(left + tilePx * 0.10f, top + tilePx),
+                strokeWidth = 3f
+            )
+            drawLine(
+                color = FireflyGoldAccent.copy(alpha = railAlpha),
+                start = Offset(left + tilePx * 0.90f, top),
+                end = Offset(left + tilePx * 0.90f, top + tilePx),
+                strokeWidth = 3f
+            )
+        } else {
+            drawLine(
+                color = FireflyGoldAccent.copy(alpha = railAlpha),
+                start = Offset(left, top + tilePx * 0.10f),
+                end = Offset(left + tilePx, top + tilePx * 0.10f),
+                strokeWidth = 3f
+            )
+            drawLine(
+                color = FireflyGoldAccent.copy(alpha = railAlpha),
+                start = Offset(left, top + tilePx * 0.90f),
+                end = Offset(left + tilePx, top + tilePx * 0.90f),
+                strokeWidth = 3f
             )
         }
     }

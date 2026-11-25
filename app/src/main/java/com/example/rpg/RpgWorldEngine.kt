@@ -14,6 +14,7 @@ enum class WorldTile {
     WATER,
     CLIFF_TREE,
     SUN_BRIDGE_SITE,
+    EAST_BRIDGE_SITE,
     AQUEDUCT_CHANNEL,
     SHRINE_STONE
 }
@@ -21,7 +22,7 @@ enum class WorldTile {
 enum class FacingDirection {
     DOWN, UP, LEFT, RIGHT
 }
-
+//TODO explore where this goes
 enum class WorldZone(
     val id: String,
     val displayName: String,
@@ -184,7 +185,7 @@ object RpgWorldEngine {
             kind = InteractableKind.NPC_VILLAGER,
             x = 3.5f,
             y = 3.5f,
-            dialogueText = "Walk east into Moss Hollow to light spore-lanterns and solve shrines, or head south across the river ford to rebuild our Sun-Bridges!"
+            dialogueText = "Walk east into Moss Hollow to light spore-lanterns and solve shrines, or head south to the Lower Sun-Bridge Pier to repair cables and lower the bridge!"
         ),
         WorldInteractable(
             id = "npc_kwame",
@@ -193,7 +194,7 @@ object RpgWorldEngine {
             kind = InteractableKind.NPC_VILLAGER,
             x = 8.5f,
             y = 7.5f,
-            dialogueText = "Every Community Mission you finish transforms this living world—restored bridges, quartz clinics, and shining aqueducts appear right on the map!"
+            dialogueText = "Every Community Mission you finish transforms this living world—lowered Sun-Bridges, quartz clinics, and shining aqueducts unlock new paths right on the map!"
         ),
 
         // Whispering Moss Hollow (North-Center)
@@ -248,15 +249,15 @@ object RpgWorldEngine {
             y = 6.5f,
             targetId = "moss_hollow"
         ),
-
-        // Lower Sun-Bridges & Dew Lagoon (South-West)
+//TODO determine how to lower sun bridges so mission can proceed
+        // Lower Sun-Bridges & Dew Lagoon (North Pier Winch + South-West)
         WorldInteractable(
             id = "landmark_sunbridge",
             title = "Lower Sun-Bridge Site",
-            actionVerb = "Inspect Bridge",
+            actionVerb = "Repair & Lower Bridge",
             kind = InteractableKind.COMMUNITY_LANDMARK,
             x = 5.5f,
-            y = 12.5f,
+            y = 9.2f,
             targetId = "mission_sunbridge"
         ),
         WorldInteractable(
@@ -326,10 +327,19 @@ object RpgWorldEngine {
         WorldInteractable(
             id = "landmark_aqueduct",
             title = "Sunken Aqueduct Valves",
-            actionVerb = "Inspect Aqueduct",
+            actionVerb = "Restore Aqueduct & East Span",
             kind = InteractableKind.COMMUNITY_LANDMARK,
             x = 14.5f,
             y = 17.5f,
+            targetId = "mission_aqueduct_gate"
+        ),
+        WorldInteractable(
+            id = "landmark_east_span",
+            title = "East Canopy Bridge Winch",
+            actionVerb = "Lower East Sun-Bridge",
+            kind = InteractableKind.COMMUNITY_LANDMARK,
+            x = 18.2f,
+            y = 13.5f,
             targetId = "mission_aqueduct_gate"
         ),
         WorldInteractable(
@@ -464,8 +474,8 @@ object RpgWorldEngine {
             PuzzleSpawnPoint(
                 id = "potential_glade_quartz",
                 title = "Mirror Glade Quartz Verge",
-                x = 19.5f,
-                y = 14.5f,
+                x = 18.2f,
+                y = 14.8f,
                 suggestedPuzzle = PuzzleType.GROVE_GRID,
                 isActiveShrine = false
             ),
@@ -708,17 +718,29 @@ object RpgWorldEngine {
         return terrain[ty][tx]
     }
 
-    fun isWalkableTile(tile: WorldTile): Boolean = when (tile) {
+    fun isSunBridgeLowered(completedMissions: Set<String>): Boolean =
+        "mission_sunbridge" in completedMissions || "work_mission_sunbridge" in completedMissions
+
+    fun isEastBridgeLowered(completedMissions: Set<String>): Boolean =
+        "mission_aqueduct_gate" in completedMissions || "work_mission_aqueduct_gate" in completedMissions
+
+    fun isWalkableTile(tile: WorldTile, completedMissions: Set<String> = emptySet()): Boolean = when (tile) {
         WorldTile.CLIFF_TREE, WorldTile.WATER -> false
+        WorldTile.SUN_BRIDGE_SITE -> isSunBridgeLowered(completedMissions)
+        WorldTile.EAST_BRIDGE_SITE -> isEastBridgeLowered(completedMissions)
         WorldTile.GRASS,
         WorldTile.MOSS_PATH,
         WorldTile.SOLAR_WALKWAY,
-        WorldTile.SUN_BRIDGE_SITE,
         WorldTile.AQUEDUCT_CHANNEL,
         WorldTile.SHRINE_STONE -> true
     }
 
-    fun isPointWalkable(x: Float, y: Float, radius: Float = HERO_COLLISION_RADIUS): Boolean {
+    fun isPointWalkable(
+        x: Float,
+        y: Float,
+        radius: Float = HERO_COLLISION_RADIUS,
+        completedMissions: Set<String> = emptySet()
+    ): Boolean {
         val minTx = (x - radius).toInt()
         val maxTx = (x + radius).toInt()
         val minTy = (y - radius).toInt()
@@ -728,7 +750,7 @@ object RpgWorldEngine {
         }
         for (ty in minTy..maxTy) {
             for (tx in minTx..maxTx) {
-                if (!isWalkableTile(tileAt(tx, ty))) return false
+                if (!isWalkableTile(tileAt(tx, ty), completedMissions)) return false
             }
         }
         return true
@@ -787,16 +809,21 @@ object RpgWorldEngine {
         var nextFacing = state.heroFacing
         var nextWalkCycle = state.walkCycle
 
+        var blockedByBridgeMessage: String? = null
         if (moving) {
             val stepX = vx * HERO_SPEED * dt
             val stepY = vy * HERO_SPEED * dt
             val candidateX = nextX + stepX
-            if (isPointWalkable(candidateX, nextY)) {
+            if (isPointWalkable(candidateX, nextY, completedMissions = completedMissions)) {
                 nextX = candidateX
+            } else {
+                blockedByBridgeMessage = detectUnbuiltBridgeMessage(candidateX, nextY, completedMissions)
             }
             val candidateY = nextY + stepY
-            if (isPointWalkable(nextX, candidateY)) {
+            if (isPointWalkable(nextX, candidateY, completedMissions = completedMissions)) {
                 nextY = candidateY
+            } else if (blockedByBridgeMessage == null) {
+                blockedByBridgeMessage = detectUnbuiltBridgeMessage(nextX, candidateY, completedMissions)
             }
             if (nextTapTarget != null && nextX == state.heroX && nextY == state.heroY) {
                 // Blocked by obstacle toward tap target; clear tap target cleanly
@@ -849,8 +876,8 @@ object RpgWorldEngine {
                 val ratio = (moveStep / distToTarget).coerceAtMost(1f)
                 val candX = cx + dx * ratio
                 val candY = cy + dy * ratio
-                if (isPointWalkable(candX, cy, radius = 0.22f)) cx = candX
-                if (isPointWalkable(cx, candY, radius = 0.22f)) cy = candY
+                if (isPointWalkable(candX, cy, radius = 0.22f, completedMissions = completedMissions)) cx = candX
+                if (isPointWalkable(cx, candY, radius = 0.22f, completedMissions = completedMissions)) cy = candY
                 cFacing = when {
                     kotlin.math.abs(dx) > kotlin.math.abs(dy) -> if (dx > 0f) FacingDirection.RIGHT else FacingDirection.LEFT
                     dy > 0f -> FacingDirection.DOWN
@@ -880,9 +907,20 @@ object RpgWorldEngine {
             )
         }
 
-        val nextToast = state.worldToast?.let { toast ->
+        var nextToastSeq = state.toastSeq
+        var nextToast = state.worldToast?.let { toast ->
             val remaining = toast.ttlSec - dt
             if (remaining > 0f) toast.copy(ttlSec = remaining) else null
+        }
+        if (nextToast == null && blockedByBridgeMessage != null) {
+            nextToastSeq++
+            nextToast = WorldToast(
+                id = nextToastSeq,
+                text = blockedByBridgeMessage,
+                x = nextX,
+                y = nextY,
+                ttlSec = 2.6f
+            )
         }
 
         return state.copy(
@@ -893,8 +931,34 @@ object RpgWorldEngine {
             walkCycle = nextWalkCycle,
             tapTarget = nextTapTarget,
             creatures = updatedCreatures,
-            worldToast = nextToast
+            worldToast = nextToast,
+            toastSeq = nextToastSeq
         ) to engagedCreature
+    }
+
+    private fun detectUnbuiltBridgeMessage(
+        x: Float,
+        y: Float,
+        completedMissions: Set<String>
+    ): String? {
+        val minTx = (x - HERO_COLLISION_RADIUS).toInt()
+        val maxTx = (x + HERO_COLLISION_RADIUS).toInt()
+        val minTy = (y - HERO_COLLISION_RADIUS).toInt()
+        val maxTy = (y + HERO_COLLISION_RADIUS).toInt()
+        for (ty in minTy..maxTy) {
+            for (tx in minTx..maxTx) {
+                when (tileAt(tx, ty)) {
+                    WorldTile.SUN_BRIDGE_SITE -> if (!isSunBridgeLowered(completedMissions)) {
+                        return "Sun-Bridge is raised! Interact with Lower Sun-Bridge Site at the pier to lower & fill planks."
+                    }
+                    WorldTile.EAST_BRIDGE_SITE -> if (!isEastBridgeLowered(completedMissions)) {
+                        return "East Sun-Bridge is raised! Complete Sunken Aqueducts to lower the eastern crossing."
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        return null
     }
 
     fun applyBattleCooldownAll(state: RpgWorldState, cooldownSec: Float = 4.5f): RpgWorldState =
@@ -938,7 +1002,7 @@ object RpgWorldEngine {
             val unlocked = mission == null || mission.isWildPatrol || communityProsperity >= mission.requiredProsperity
             val cleared = bestEnemy.missionId != null && bestEnemy.missionId in completedMissions
             val verb = when {
-                !unlocked -> "Inspect (${mission.requiredProsperity}% Town)"
+                !unlocked -> "Inspect (${mission?.requiredProsperity}% Town)"
                 cleared -> "Rematch ${bestEnemy.name}"
                 else -> "Battle ${bestEnemy.name}"
             }
@@ -987,10 +1051,14 @@ object RpgWorldEngine {
         return NearestWorldTarget()
     }
 
-    fun isPointReachableFromSpawn(targetX: Float, targetY: Float): Boolean {
+    fun isPointReachableFromSpawn(
+        targetX: Float,
+        targetY: Float,
+        completedMissions: Set<String> = setOf("mission_sunbridge", "mission_aqueduct_gate")
+    ): Boolean {
         val startTile = 5 to 5
         val goalTile = targetX.toInt() to targetY.toInt()
-        if (!isWalkableTile(tileAt(goalTile.first, goalTile.second))) return false
+        if (!isWalkableTile(tileAt(goalTile.first, goalTile.second), completedMissions)) return false
         val visited = mutableSetOf(startTile)
         val queue = ArrayDeque<Pair<Int, Int>>().apply { add(startTile) }
         val dirs = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
@@ -1004,7 +1072,7 @@ object RpgWorldEngine {
                 if (nx in 0 until MAP_WIDTH &&
                     ny in 0 until MAP_HEIGHT &&
                     next !in visited &&
-                    isWalkableTile(tileAt(nx, ny))
+                    isWalkableTile(tileAt(nx, ny), completedMissions)
                 ) {
                     visited.add(next)
                     queue.addLast(next)
@@ -1015,32 +1083,34 @@ object RpgWorldEngine {
     }
 
     private fun buildTerrainGrid(): Array<Array<WorldTile>> {
-        // 28 wide x 22 tall lush, interconnected Solari Canopy & Wilds map
+        // 28 wide x 22 tall lush, bridge-gated Solari Canopy & Wilds map
         // Legend:
         // T = CLIFF_TREE, G = GRASS, P = MOSS_PATH, W = SOLAR_WALKWAY,
-        // ~ = WATER, B = SUN_BRIDGE_SITE, A = AQUEDUCT_CHANNEL, S = SHRINE_STONE
+        // ~ = WATER, B = SUN_BRIDGE_SITE (mission_sunbridge),
+        // E = EAST_BRIDGE_SITE (mission_aqueduct_gate),
+        // A = AQUEDUCT_CHANNEL, S = SHRINE_STONE
         val rows = listOf(
             "TTTTTTTTTTTTTTTTTTTTTTTTTTTT", // 0
-            "TWWWWWWWWWTTGGGGGGGGTTGGGGGT", // 1
-            "TWWWWWWWWWPPGGGGGGGGPPGGGGGT", // 2
-            "TWWWWWWWWWTGGGGGGGGGGGGGGGGT", // 3
-            "TWWWWWWWWWPPGGGGGGGGPPGGGGGT", // 4
-            "TWWWWWWWWWGGGGGGGGGGGGGGGGGT", // 5
-            "TWWWWWWWWWGGGGGGGGGGGGGGGGGT", // 6
-            "TWWWWWWWWWPPGGGGGGGGPPGGGGGT", // 7
-            "TGGGGPPGGGTTGGGGGGGGTTGGGGGT", // 8
-            "TTTTTPPTTTTTTTTPPTTTTTTTTPPT", // 9  (passes at x=5..6, x=15..16, x=25..26)
-            "~~~~~~PP~~~~TTGGGGGGGGTTGGGT", // 10 (stepping ford x=6..7)
-            "~~~~BBPP~~~~GGGGGGGGGGGGGGGT", // 11 (Sun-Bridge site at x=4..5 + ford at 6..7)
-            "TTTTBBPPTTTTTTGGGGGGTTGGGGGT", // 12
-            "TGGGGPPPPGGGGGGSSSSGGGGGGGGT", // 13
-            "TGGGGGGGGGGGGGGSSSSPPGGGGGGT", // 14
-            "TGGGGGGGGGGGTTAAAAAAGGPPGGGT", // 15 (Aqueduct channel)
-            "TGGGGGGGGGGGPPAAAAAAGGGGGGGT", // 16
-            "TGGGGGGGGGGGGGGGGGGGGSSSSGGT", // 17 (Heartwood Shrine stone)
-            "TGGGGGGGGGGGGGGGGGGGGSSSSGGT", // 18
-            "TGGGGGGGGGGGGGPPGGGGGGSSSSGT", // 19
-            "TGGGGGGGGGGGGGGGGGGGGSSSSGGT", // 20
+            "TWWWWWWWWWTTGGGGGGGTGGGGGGGT", // 1
+            "TWWWWWWWWWPPGGGGGGGTGGGGGGGT", // 2
+            "TWWWWWWWWWTGGGGGGGG~GGGGGGGT", // 3
+            "TWWWWWWWWWPPGGGGGGG~GGGGGGGT", // 4
+            "TWWWWWWWWWGGGGGGGGG~GGGGGGGT", // 5
+            "TWWWWWWWWWGGGGGGGGGEGGGGGGGT", // 6  (East Bridge North at x=19)
+            "TWWWWWWWWWPPGGGGGGGEGGGGGGGT", // 7  (East Bridge North at x=19)
+            "TGGGPPPGGGTTGGGGGGG~GGGGPPGT", // 8
+            "TTTTPPPTTTTTTTTTTTT~TTTTPPGT", // 9  (Sun-Bridge North Pier at x=4..6)
+            "~~~~BB~~~~~~~~~~~~~~GGGGPPGT", // 10 (River chasm + Sun-Bridge at x=4..5)
+            "~~~~BB~~~~~GGGGGGGGTGGGGGGGT", // 11 (Sun-Bridge at x=4..5; Mirror Glade north grass)
+            "TTTTBBTTTTTGGGGGGGG~GGGGGGGT", // 12 (Sun-Bridge south landing into Dew Lagoon)
+            "TGGGGPPPPGGGGGGSSSSEGGGGGGGT", // 13 (East Bridge South at x=19)
+            "TGGGGGGGGGGGGGGSSSSEPPGGGGGT", // 14 (East Bridge South at x=19)
+            "TGGGGGGGGGGGTTAAAAA~GGGGGGGT", // 15 (Aqueduct channel)
+            "TGGGGGGGGGGGPPAAAAA~GGGGGGGT", // 16
+            "TGGGGGGGGGGGGGGGGGG~GGSSSSGT", // 17 (Heartwood Shrine stone)
+            "TGGGGGGGGGGGGGGGGGG~GGSSSSGT", // 18
+            "TGGGGGGGGGGGGGPPGGG~GGSSSSGT", // 19
+            "TGGGGGGGGGGGGGGGGGG~GGSSSSGT", // 20
             "TTTTTTTTTTTTTTTTTTTTTTTTTTTT"  // 21
         )
         return Array(MAP_HEIGHT) { y ->
@@ -1052,6 +1122,7 @@ object RpgWorldEngine {
                     'W' -> WorldTile.SOLAR_WALKWAY
                     '~' -> WorldTile.WATER
                     'B' -> WorldTile.SUN_BRIDGE_SITE
+                    'E' -> WorldTile.EAST_BRIDGE_SITE
                     'A' -> WorldTile.AQUEDUCT_CHANNEL
                     'S' -> WorldTile.SHRINE_STONE
                     else -> WorldTile.GRASS

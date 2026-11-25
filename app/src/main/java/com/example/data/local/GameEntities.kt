@@ -108,7 +108,10 @@ data class LocalPuzzleProgressEntity(
     val solvedCount: Int = 0,
     val bestScore: Int = 0,
     val bestStreak: Int = 0,
-    val lastSolvedMillis: Long = 0L
+    val lastSolvedMillis: Long = 0L,
+    val nectar: Int? = 0,
+    val skillXp: Int? = 0,
+    val moonstones: Int? = 0
 )
 
 @Entity(tableName = "pending_puzzle_completions")
@@ -120,5 +123,28 @@ data class PendingPuzzleCompletionEntity(
     val levelPlayed: Int,
     val starsEarned: Int,
     val rawScore: Int,
+    val completedAtMillis: Long
+)
+
+@Entity(tableName = "pending_mission_outcomes")
+data class PendingMissionOutcomeEntity(
+    @PrimaryKey val eventId: String,
+    val userId: String,
+    val missionId: String,
+    val victory: Boolean,
+    val calmedSpirit: Boolean,
+    val remainingMana: Int,
+    val usedLootCsv: String,
+    val completedAtMillis: Long
+)
+
+@Entity(tableName = "pending_profile_rewards")
+data class PendingProfileRewardEntity(
+    @PrimaryKey val eventId: String,
+    val userId: String,
+    val heroExpGain: Int,
+    val nectarGain: Int,
+    val moonstonesGain: Int,
+    val completedMissionId: String?,
     val completedAtMillis: Long
 )

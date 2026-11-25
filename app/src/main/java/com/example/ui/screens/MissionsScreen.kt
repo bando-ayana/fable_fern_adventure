@@ -71,7 +71,12 @@ fun MissionsScreen(
     onRestMana: () -> Unit,
     onBrewLoot: (LootItemType) -> Unit,
     onLaunchPuzzle: (PuzzleType) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAdvanceCommunityStep: Any,
+    onPerformBattleAction: Any,
+    onUseBattleLoot: Any,
+    onRetreatFromBattle: Any,
+    onDismissMissionSheet: Any
 ) {
     val profile = uiState.profile
     val a11y = LocalAccessibilityUi.current

@@ -31,12 +31,14 @@ class PuzzleCompletionSyncWorker(
             val databaseId = applicationContext.getString(R.string.firestore_database_id)
             val firestore = FirebaseFirestore.getInstance(databaseId)
             val room = FernfableDatabase.getInstance(applicationContext)
-
-            GameRepository(
+            val repository = GameRepository(
                 db = firestore,
                 localDatabase = room,
                 context = applicationContext
-            ).syncPendingPuzzleCompletions(userId)
+            )
+
+            repository.syncPendingPuzzleCompletions(userId)
+            repository.syncPendingMissionOutcomes(userId)
 
             Result.success()
         } catch (e: CancellationException) {
@@ -54,7 +56,7 @@ class PuzzleCompletionSyncWorker(
         val capabilities = manager.getNetworkCapabilities(network) ?: return false
 
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     companion object {

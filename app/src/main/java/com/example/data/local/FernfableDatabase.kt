@@ -13,7 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CreatureProgressEntity::class,
         PuzzleStatsEntity::class,
         LocalPuzzleProgressEntity::class,
-        PendingPuzzleCompletionEntity::class
+        PendingPuzzleCompletionEntity::class,
+        PendingMissionOutcomeEntity::class,
+        PendingProfileRewardEntity::class
     ],
     version = 4,
     exportSchema = false

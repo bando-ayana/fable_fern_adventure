@@ -11,11 +11,14 @@ import com.example.model.MissionCompletionSummary
 import com.example.rpg.BattleActionType
 import com.example.rpg.BattlePhase
 import com.example.rpg.InteractableKind
+import com.example.rpg.InteractiveZoneEngine
+import com.example.rpg.InteractiveZoneState
 import com.example.rpg.RpgBattleEngine
 import com.example.rpg.RpgBattleState
 import com.example.rpg.RpgWorldEngine
 import com.example.rpg.RpgWorldState
 import com.example.rpg.WorldToast
+import com.example.rpg.ZoneKind
 import com.example.stateHolder.FernfableUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +44,9 @@ class CommunityMissionViewModel(
         StateFlow<MissionCompletionSummary?> =
         _missionSummary.asStateFlow()
 
+    private val _activeZoneState = MutableStateFlow<InteractiveZoneState?>(null)
+    val activeZoneState: StateFlow<InteractiveZoneState?> = _activeZoneState.asStateFlow()
+
     private val _worldState =
         MutableStateFlow(RpgWorldState())
     val worldState: StateFlow<RpgWorldState> =
@@ -53,8 +59,6 @@ class CommunityMissionViewModel(
 
     private val _snackbarMessage =
         MutableStateFlow<String?>(null)
-    val snackbarMessage: StateFlow<String?> =
-        _snackbarMessage.asStateFlow()
 
     fun stepWorldFrame(
         joyX: Float,
@@ -139,6 +143,12 @@ class CommunityMissionViewModel(
                 dialogueBody = null
             )
         }
+    }
+
+    fun dismissMissionSheet() {
+        _activeBattle.value = null
+        _missionSummary.value = null
+        _worldState.update { RpgWorldEngine.applyBattleCooldownAll(it) }
     }
 
     fun postWorldToast(text: String) {
@@ -380,12 +390,97 @@ class CommunityMissionViewModel(
         finalizeMissionBattle(retreated)
     }
 
-    fun dismissMissionSheet() {
-        _activeBattle.value = null
-        _missionSummary.value = null
-        _worldState.update {
-            RpgWorldEngine.applyBattleCooldownAll(it)
+    // --- Playable Interactive Sub-Zones (Valves, Sun-Bridges, Sanctuary Works) ---
+
+    fun stepZoneFrame(joyX: Float, joyY: Float, deltaSec: Float) {
+        _activeZoneState.update { state ->
+            state?.let { InteractiveZoneEngine.stepZone(it, joyX, joyY, deltaSec) }
         }
+    }
+
+    fun setZoneTapTarget(x: Float, y: Float) {
+        val clampedX = x.coerceIn(0.5f, InteractiveZoneEngine.ZONE_WIDTH - 0.5f)
+        val clampedY = y.coerceIn(0.5f, InteractiveZoneEngine.ZONE_HEIGHT - 0.5f)
+        _activeZoneState.update { state ->
+            state?.copy(tapTarget = clampedX to clampedY, toastText = null)
+        }
+    }
+
+    fun triggerZoneWorkstation(stationId: String) {
+        val current = _activeZoneState.value ?: return
+        val outcome = InteractiveZoneEngine.completeWorkstation(current, stationId) ?: return
+        _activeZoneState.value = outcome.updatedState
+
+        viewModelScope.launch {
+            runRepositoryAction {
+                val mission = outcome.updatedState.mission
+                val workFlag = if (mission != null &&
+                    outcome.updatedState.kind == ZoneKind.COMMUNITY_MISSION &&
+                    (outcome.station.lowersBridgePlanks || outcome.justClearedZone)
+                ) {
+                    "work_${mission.id}"
+                } else {
+                    null
+                }
+
+                // Persist per-station points & loot immediately
+                repository.recordZoneWorkstationReward(
+                    userId = currentUserId,
+                    nectarGain = outcome.station.rewardNectar,
+                    expGain = outcome.station.rewardExp,
+                    magicGain = outcome.station.rewardMagic,
+                    lootItem = outcome.station.rewardLoot,
+                    markWorkId = workFlag
+                )
+
+                // If zone just cleared, award zone completion bonuses & mark quest cleared if chapter action
+                if (outcome.justClearedZone) {
+                    val stateAfter = outcome.updatedState
+                    if (stateAfter.kind == ZoneKind.CHAPTER_ACTION &&
+                        stateAfter.chapterBiome != null &&
+                        stateAfter.chapterChoice != null
+                    ) {
+                        val biome = stateAfter.chapterBiome
+                        val choice = stateAfter.chapterChoice
+                        repository.recordStoryChoice(
+                            userId = currentUserId,
+                            biomeId = biome.id,
+                            creatureId = biome.creatureId,
+                            rewardNectar = stateAfter.completionBonusNectar,
+                            bondGain = choice.bondGain,
+                            rewardExp = stateAfter.completionBonusExp,
+                            bonusMagic = stateAfter.completionBonusMagic,
+                            bonusMoonstones = stateAfter.completionBonusMoonstones,
+                            bonusLoot = stateAfter.completionBonusLoot
+                        )
+                        _snackbarMessage.value =
+                            "${stateAfter.title} complete! Chapter cleared with Loot & EXP!"
+                    } else if (stateAfter.kind == ZoneKind.COMMUNITY_MISSION) {
+                        repository.recordZoneWorkstationReward(
+                            userId = currentUserId,
+                            nectarGain = stateAfter.completionBonusNectar,
+                            expGain = stateAfter.completionBonusExp,
+                            magicGain = stateAfter.completionBonusMagic,
+                            moonstonesGain = stateAfter.completionBonusMoonstones,
+                            lootItem = stateAfter.completionBonusLoot,
+                            markWorkId = mission?.let { "work_${it.id}" }
+                        )
+                        _snackbarMessage.value =
+                            "${stateAfter.title} repaired! Points, Loot & Confrontation ready."
+                    }
+                }
+            }
+        }
+    }
+
+    fun confrontMissionCreatureFromZone() {
+        val mission = _activeZoneState.value?.mission ?: return
+        _activeZoneState.value = null
+        startMission(mission, skipPrepToCombat = true)
+    }
+
+    fun dismissActiveZone() {
+        _activeZoneState.value = null
     }
 
     fun restManaAtSanctuary() {
@@ -461,6 +556,15 @@ class CommunityMissionViewModel(
                     "Victory counted for this intro. " +
                     "Cloud rewards were not saved; " +
                     "you can continue playing."
+                repository.queueMissionOutcomeLocally(
+                    userId = currentUserId,
+                    mission = finalState.mission,
+                    victory = victory,
+                    calmedSpirit = finalState.calmedSpirit,
+                    remainingMana = finalState.heroMana,
+                    usedLootInBattle = finalState.usedLootInBattle,
+                    profile = sanctuaryUiState.value.profile
+                )
             } finally {
                 _isRecordingMissionRewards.value =
                     false

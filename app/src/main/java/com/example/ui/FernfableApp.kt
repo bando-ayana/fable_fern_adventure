@@ -284,31 +284,37 @@ fun JungleAtmosphereBackground(
     completionResult: PuzzleCompletionResult?,
     missionSummary: MissionCompletionSummary?
 ) {
+    val fireflyState by fernfableViewModel.fireflyState.collectAsStateWithLifecycle()
+    val mushroomState by fernfableViewModel.mushroomState.collectAsStateWithLifecycle()
+    val activeZoneState by fernfableViewModel.activeZoneState.collectAsStateWithLifecycle()
+    val fernMosaicState by fernfableViewModel.fernMosaicState.collectAsStateWithLifecycle()
+    val canopySpotterState by fernfableViewModel.canopySpotterState.collectAsStateWithLifecycle()
+    val groveGridState by fernfableViewModel.groveGridState.collectAsStateWithLifecycle()
+    val vineWeaverState by fernfableViewModel.vineWeaverState.collectAsStateWithLifecycle()
+    val spiritLockState by fernfableViewModel.spiritLockState.collectAsStateWithLifecycle()
+    val introState by introViewModel.introState.collectAsStateWithLifecycle()
+    val worldState by fernfableViewModel.worldState.collectAsStateWithLifecycle()
+
     val activeEncounter by fernfableViewModel.activeEncounter.collectAsStateWithLifecycle()
     val encounterFeedback by fernfableViewModel.encounterFeedback.collectAsStateWithLifecycle()
     val activePuzzleType by fernfableViewModel.activePuzzleType.collectAsStateWithLifecycle()
     val activePuzzleLevel by fernfableViewModel.activePuzzleLevel.collectAsStateWithLifecycle()
-    val fireflyState by fernfableViewModel.fireflyState.collectAsStateWithLifecycle()
-    val mushroomState by fernfableViewModel.mushroomState.collectAsStateWithLifecycle()
-    val mushroomSelectedSlot by fernfableViewModel.mushroomSelectedSlot.collectAsStateWithLifecycle()
-    val fernMosaicState by fernfableViewModel.fernMosaicState.collectAsStateWithLifecycle()
-    val mosaicStatus by fernfableViewModel.mosaicStatus.collectAsStateWithLifecycle()
-    val canopySpotterState by fernfableViewModel.canopySpotterState.collectAsStateWithLifecycle()
-    val spotterStatus by fernfableViewModel.spotterStatus.collectAsStateWithLifecycle()
-    val groveGridState by fernfableViewModel.groveGridState.collectAsStateWithLifecycle()
-    val selectedGridCell by fernfableViewModel.selectedGridCell.collectAsStateWithLifecycle()
-    val vineWeaverState by fernfableViewModel.vineWeaverState.collectAsStateWithLifecycle()
-    val spiritLockState by fernfableViewModel.spiritLockState.collectAsStateWithLifecycle()
     val activeBattle by fernfableViewModel.activeBattle.collectAsStateWithLifecycle()
-    val worldState by fernfableViewModel.worldState.collectAsStateWithLifecycle()
+    val mushroomSelectedSlot by fernfableViewModel.mushroomSelectedSlot.collectAsStateWithLifecycle()
+    val selectedGridCell by fernfableViewModel.selectedGridCell.collectAsStateWithLifecycle()
+    val mosaicStatus by fernfableViewModel.mosaicStatus.collectAsStateWithLifecycle()
+    val spotterStatus by fernfableViewModel.spotterStatus.collectAsStateWithLifecycle()
+
     val calmMode = LocalAccessibilityUi.current.calmMode
+
+    val isInZoneOverlay = activeZoneState != null
     val isProfileLoaded by fernfableViewModel.isProfileLoaded.collectAsStateWithLifecycle()
     val isRecordingMissionReward by fernfableViewModel.isRecordingMissionRewards.collectAsStateWithLifecycle()
     val isAudioMuted by audioManager.isMuted.collectAsStateWithLifecycle()
     val introCompletedLocally by
     introViewModel.introCompletedLocally.collectAsStateWithLifecycle()
     val isInOnboarding = !isProfileLoaded || (!uiState.profile.introCompleted && !introCompletedLocally)
-    val introState by introViewModel.introState.collectAsStateWithLifecycle()
+
     val screenWidthDp = LocalWindowInfo.current.containerSize.width
     val useRail = screenWidthDp >= 600
     val pendingDatabaseRetry by
@@ -319,7 +325,7 @@ fun JungleAtmosphereBackground(
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            if (!useRail && !isPlayingPuzzle && !isInOnboarding) {
+            if (!useRail && !isPlayingPuzzle && !isInOnboarding && !isInZoneOverlay) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.94f)
                 ) {
@@ -361,7 +367,7 @@ fun JungleAtmosphereBackground(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                if (useRail && !isPlayingPuzzle && !isInOnboarding) {
+                if (useRail && !isPlayingPuzzle && !isInOnboarding && !isInZoneOverlay) {
                     NavigationRail(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (calmMode) 1f else 0.92f)
                     ) {
@@ -439,7 +445,7 @@ fun JungleAtmosphereBackground(
                             GroveScreen(
                                 uiState = uiState,
                                 worldState = worldState,
-                                hasActiveBattle = activeBattle != null,
+                                hasActiveBattle = activeBattle != null || isInZoneOverlay,
                                 activeEncounter = activeEncounter,
                                 encounterFeedback = encounterFeedback,
                                 userEmail = userEmail,
@@ -473,6 +479,11 @@ fun JungleAtmosphereBackground(
                             uiState = uiState,
                             onStartMission = fernfableViewModel::startMission,
                             onRestMana = fernfableViewModel::restManaAtSanctuary,
+                            onAdvanceCommunityStep = fernfableViewModel::advanceMissionCommunityStep,
+                            onPerformBattleAction = fernfableViewModel::performBattleAction,
+                            onUseBattleLoot = fernfableViewModel::useBattleLoot,
+                            onRetreatFromBattle = fernfableViewModel::retreatFromBattle,
+                            onDismissMissionSheet = fernfableViewModel::dismissMissionSheet,
                             onBrewLoot = fernfableViewModel::brewBattleLoot,
                             onLaunchPuzzle = { type -> launchPuzzle(type, null, true) }
                         )
@@ -501,7 +512,7 @@ fun JungleAtmosphereBackground(
                         BrainSkillsScreen(
                             uiState = uiState,
                             onTrainSkill = { type -> launchPuzzle(type, null, false) },
-                            onExploreRpg = { navigateTop(FernfableRoutes.GROVE) }
+                            onExploreRpg = { navigateTop(FernfableRoutes.GROVE) },
                         )
                     }
 

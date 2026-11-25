@@ -85,7 +85,7 @@ class GameRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertFalse(spotterStatsUntouched?.accessed ?: true)
 
         val completion = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
-            repository.recordPuzzleSolved(
+            repository.recordPuzzleSolvedLocally(
                 userId = aliceUid,
                 puzzleType = PuzzleType.MUSHROOM_MELODY,
                 difficulty = DifficultyTier.SPROUT,
@@ -97,7 +97,7 @@ class GameRepositoryRuleTest : FirestoreEmulatorTestBase() {
         assertTrue(completion.nectarEarned > 0)
 
         val replayBetterScore = withTimeout(DEFAULT_TIMEOUT_MS.milliseconds) {
-            repository.recordPuzzleSolved(
+            repository.recordPuzzleSolvedLocally(
                 userId = aliceUid,
                 puzzleType = PuzzleType.MUSHROOM_MELODY,
                 difficulty = DifficultyTier.ELDER,

@@ -448,12 +448,17 @@ fun BiomeEncounterSheet(
 
             if (encounterFeedback == null) {
                 biome.storyChoices.forEach { choice ->
+                    val badgeText = if (choice.opensPuzzle == null) {
+                        "Enter Area · EXP & Loot"
+                    } else {
+                        "+${choice.rewardExp} EXP"
+                    }
                     FilledTonalButton(
                         onClick = { onChooseStoryOption(biome, choice) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .minimumInteractiveComponentSize()
-                            .speakOnTouch("${choice.label}, plus ${choice.rewardExp} EXP")
+                            .speakOnTouch("${choice.label}, $badgeText")
                             .testTag("story_choice_${choice.id}")
                     ) {
                         Row(
@@ -469,7 +474,7 @@ fun BiomeEncounterSheet(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "+${choice.rewardExp} EXP",
+                                text = badgeText,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary

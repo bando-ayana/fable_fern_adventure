@@ -96,7 +96,9 @@ class FernfableViewModel(
         missions.worldState
     val isRecordingMissionRewards =
         missions.isRecordingMissionRewards
+    val activeZoneState = missions.activeZoneState
 
+    //Sancuary functions
     fun setDifficulty(tier: DifficultyTier) =
         sanctuary.setDifficulty(tier)
 
@@ -137,6 +139,7 @@ class FernfableViewModel(
         missions.clearSnackbar()
     }
 
+    // Puzzle functions
     fun startPuzzle(
         type: PuzzleType,
         levelOverride: Int? = null,
@@ -203,6 +206,8 @@ class FernfableViewModel(
 
     fun useSpiritHint() =
         puzzles.useSpiritHint()
+
+    // Missions functions
 
     fun stepWorldFrame(
         joyX: Float,
